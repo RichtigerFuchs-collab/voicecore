@@ -4,105 +4,97 @@
 ═══════════════════════════════════════════════════════════════
 
 ━━━ WAS WIR BAUEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Voice-Processing-System: Sprache → Whisper → GPT → Google Docs
-Phase 1 (erledigt): Mikrofon → Upload → FastAPI Backend (Cloud)
+Voice-Processing-System: Sprache → Whisper/Gemini → GPT → Google Docs
+Phase 1+2 (erledigt): Mikrofon → Upload → Gemini Transkription (Cloud)
 
 ━━━ TECHNISCHER STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Frontend : React + Vite → Netlify
-  Backend  : FastAPI + Python 3.13 → Render.com
+  Frontend : React + Vite (gebaut, dist/ eingecheckt)
+  Backend  : FastAPI + Python + Gemini 2.5 Flash API
+  Hosting  : Render.com (Frontend + Backend in EINEM Service)
   Pfad     : C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\
 
-━━━ LIVE URLS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Frontend : https://voicecore.netlify.app
-  Backend  : https://voicecore.onrender.com
+━━━ LIVE URL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  App      : https://voicecore.onrender.com
   GitHub   : https://github.com/RichtigerFuchs-collab/voicecore
 
 ━━━ PROJEKTSTRUKTUR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   voicecore/
-  ├── render.yaml              ← Render.com Config (Repo-Wurzel!)
+  ├── main.py               ← Einstiegspunkt fuer Render (importiert backend.main)
+  ├── render.yaml           ← Render.com Config
+  ├── requirements.txt      ← Kopie von backend/requirements.txt (Render braucht das)
   ├── FORTSCHRITT.txt
   ├── README.md
   ├── .gitignore
   ├── backend/
-  │   ├── main.py              ← FastAPI: /health + /upload
-  │   ├── requirements.txt     ← fastapi, uvicorn, python-multipart
-  │   ├── render.yaml          ← ALT, nicht mehr relevant
-  │   └── .venv/               ← nicht in git!
+  │   ├── __init__.py       ← macht backend zu Python-Paket
+  │   ├── main.py           ← FastAPI: /health + /upload + Gemini + Static Files
+  │   ├── requirements.txt
+  │   └── .venv/            ← nicht in git!
   └── frontend/
-      ├── netlify.toml         ← Netlify Build + SPA-Routing
-      ├── vite.config.js       ← host:true (Windows-Fix)
-      ├── .env.local           ← VITE_API_URL=http://localhost:8000
-      ├── .env.production      ← VITE_API_URL=https://voicecore.onrender.com
-      ├── index.html
+      ├── dist/             ← EINGECHECKT! Muss nach Aenderungen neu gebaut werden
+      ├── vite.config.js
+      ├── .env.local        ← VITE_API_URL=http://localhost:8000
+      ├── .env.production   ← VITE_API_URL=https://voicecore.onrender.com
       ├── package.json
       └── src/
-          ├── App.jsx          ← komplettes UI + State Machine
+          ├── App.jsx
           └── main.jsx
+
+━━━ RENDER.COM EINSTELLUNGEN (Dashboard) ━━━━━━━━━━━━━━━━━━━━
+  Root Directory : (leer)
+  Build Command  : pip install -r requirements.txt
+  Start Command  : uvicorn main:app --host 0.0.0.0 --port $PORT
+  Env Variables  : GEMINI_API_KEY = [gesetzt]
 
 ━━━ ERLEDIGTE SCHRITTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  ✓ Projektstruktur erstellt
-  ✓ Frontend vollständig (React, Vite, Record-Button, State Machine)
-  ✓ Backend vollständig (FastAPI /health + /upload, CORS, MIME-Check)
-  ✓ Cross-Browser Audio-Support (Chrome WebM, Safari MP4, Firefox OGG)
-  ✓ Python 3.13 installiert
-  ✓ Python venv erstellt + requirements installiert
-  ✓ npm install (node_modules vorhanden)
-  ✓ vite.config.js: host:true (Fix für ERR_CONNECTION_REFUSED Windows)
-  ✓ render.yaml zur Repo-Wurzel verschoben + rootDir:backend gesetzt
-  ✓ netlify.toml erstellt (Build-Befehl + SPA-Redirect-Rule)
-  ✓ PowerShell Execution Policy gesetzt (RemoteSigned, CurrentUser)
-  ✓ LOKALER TEST ERFOLGREICH
-  ✓ GitHub CLI installiert + GitHub-Account verbunden (RichtigerFuchs-collab)
-  ✓ Git-Repo initialisiert + erster Commit
-  ✓ GitHub Repo erstellt + Code gepusht
-  ✓ Backend auf Render.com deployed → https://voicecore.onrender.com
-  ✓ Frontend auf Netlify deployed → https://voicecore.netlify.app
-  ✓ CLOUD-TEST ERFOLGREICH: /health gibt {"status":"ok"}, Frontend HTTP 200
+  ✓ Phase 1: Frontend + Backend lokal funktionierend
+  ✓ GitHub CLI installiert, Repo erstellt (RichtigerFuchs-collab/voicecore)
+  ✓ Backend auf Render.com deployed
+  ✓ Frontend + Backend in EINEM Render-Service zusammengeführt
+  ✓ Phase 2: Gemini 2.5 Flash Transkription funktioniert
+  ✓ VOLLTEST ERFOLGREICH: Aufnahme → Upload → Transkript sichtbar
 
-━━━ PHASE 2 – Die Intelligenz (nächster Schritt) ━━━━━━━━━━━━━
-  HINWEIS: Free Tier auf Render schläft nach 15 Min Inaktivität ein.
-  Erster Request kann ~30 Sek dauern (cold start). Für Kathrin-Test ok.
+━━━ OFFENE SCHRITTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  [ ] OpenAI Whisper API einbinden (Audio → Text)
-        - OPENAI_API_KEY als Render Environment Variable setzen
-        - backend/main.py: /upload ruft Whisper auf statt Stub-Response
-        - pip install openai → requirements.txt ergänzen
-
-  [ ] GPT für Post-Processing (Text → strukturierter Output)
+  [ ] PHASE 2b – GPT/Gemini Post-Processing
         - Templates einbetten (Tagebuch, Quick Note, Restaurant Review)
-        - GPT-Prompt je Template unterschiedlich
+        - Gemini formatiert den transkribierten Text je nach Template
+        - z.B. Tagebuch → schöner Fliesstext, Quick Note → Stichpunkte
 
-━━━ PHASE 3 – Die Brücke ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  [ ] Google Docs API anbinden
+  [ ] PHASE 3 – Google Docs API
         - Google OAuth einrichten (Google Cloud Console)
         - google-api-python-client in requirements.txt
         - Append-Mode: Text ans Ende des jeweiligen Docs anhängen
 
-━━━ BEFEHLE ZUM NEUSTART (lokal) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ BEFEHLE (lokal) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  Backend (PowerShell Terminal 1):
-    cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\backend"
+  Backend starten:
+    cd "...\voicecore\backend"
     .venv\Scripts\uvicorn main:app --reload --port 8000
 
-  Frontend (PowerShell Terminal 2):
-    cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\frontend"
+  Frontend starten:
+    cd "...\voicecore\frontend"
     npm run dev
+    → http://localhost:5173
 
-  Browser: http://localhost:5173
+  NACH FRONTEND-AENDERUNGEN (dist neu bauen + pushen):
+    cd "...\voicecore\frontend"
+    npm run build
+    cd ..
+    git add frontend/dist/
+    git commit -m "build: frontend neu gebaut"
+    git push
+    → Render deployt automatisch (nur pip install, kein Node nötig)
 
-  FALLS .venv fehlt (nach Clone/Umzug):
+  NACH BACKEND-AENDERUNGEN (nur pushen):
+    git add .
+    git commit -m "..."
+    git push
+    → Render deployt automatisch
+
+  FALLS .venv fehlt:
     python -m venv .venv
     .venv\Scripts\pip install -r requirements.txt
-
-  FALLS npm Execution Policy Fehler:
-    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-  DEPLOYMENT (nach Code-Änderungen):
-    cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore"
-    git add .
-    git commit -m "deine nachricht"
-    git push
-    → Render + Netlify deployen automatisch!
 
 ═══════════════════════════════════════════════════════════════
