@@ -1,0 +1,128 @@
+═══════════════════════════════════════════════════════════════
+  VOICECORE V1 – FORTSCHRITT
+  Stand: 24.02.2026
+═══════════════════════════════════════════════════════════════
+
+━━━ WAS WIR BAUEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Voice-Processing-System: Sprache → Whisper → GPT → Google Docs
+Phase 1 (erledigt): Mikrofon → Upload → FastAPI Backend (lokal)
+
+━━━ TECHNISCHER STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Frontend : React + Vite
+  Backend  : FastAPI + Python 3.13
+  Hosting  : Render.com (Backend), Netlify (Frontend) – ausstehend
+  Pfad     : C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\
+
+━━━ PROJEKTSTRUKTUR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  voicecore/
+  ├── render.yaml              ← Render.com Config (Repo-Wurzel!)
+  ├── FORTSCHRITT.txt
+  ├── README.md
+  ├── .gitignore
+  ├── backend/
+  │   ├── main.py              ← FastAPI: /health + /upload
+  │   ├── requirements.txt     ← fastapi, uvicorn, python-multipart
+  │   ├── render.yaml          ← ALT, nicht mehr relevant
+  │   └── .venv/               ← nicht in git!
+  └── frontend/
+      ├── netlify.toml         ← Netlify Build + SPA-Routing
+      ├── vite.config.js       ← host:true (Windows-Fix)
+      ├── .env.local           ← VITE_API_URL=http://localhost:8000
+      ├── .env.production      ← VITE_API_URL=https://voicecore-api.onrender.com
+      ├── index.html
+      ├── package.json
+      └── src/
+          ├── App.jsx          ← komplettes UI + State Machine
+          └── main.jsx
+
+━━━ ERLEDIGTE SCHRITTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✓ Projektstruktur erstellt
+  ✓ Frontend vollständig (React, Vite, Record-Button, State Machine)
+  ✓ Backend vollständig (FastAPI /health + /upload, CORS, MIME-Check)
+  ✓ Cross-Browser Audio-Support (Chrome WebM, Safari MP4, Firefox OGG)
+  ✓ Python 3.13 installiert
+  ✓ Python venv erstellt + requirements installiert
+  ✓ npm install (node_modules vorhanden)
+  ✓ vite.config.js: host:true (Fix für ERR_CONNECTION_REFUSED Windows)
+  ✓ render.yaml zur Repo-Wurzel verschoben + rootDir:backend gesetzt
+  ✓ netlify.toml erstellt (Build-Befehl + SPA-Redirect-Rule)
+  ✓ PowerShell Execution Policy gesetzt (RemoteSigned, CurrentUser)
+  ✓ LOKALER TEST ERFOLGREICH:
+      - Backend läuft auf http://localhost:8000
+      - Frontend läuft auf http://localhost:5173
+      - Aufnahme → Upload → Job-ID + Stub-Response funktioniert
+
+━━━ OFFENE SCHRITTE (Deployment) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ ] SCHRITT 1 – GitHub Repo erstellen
+        - Neues Repo auf github.com anlegen (z.B. "voicecore")
+        - Lokal initialisieren und pushen:
+            cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore"
+            git init
+            git add .
+            git commit -m "feat: VoiceCore Phase 1 PoC"
+            git remote add origin https://github.com/USERNAME/voicecore.git
+            git push -u origin main
+        - WICHTIG: .venv/ und node_modules/ sind in .gitignore → ok
+
+  [ ] SCHRITT 2 – Backend auf Render.com deployen
+        - Account auf render.com (kostenlos)
+        - New → Web Service → GitHub-Repo verbinden
+        - Render findet render.yaml automatisch an der Repo-Wurzel
+        - rootDir: backend → Render baut aus dem backend/ Ordner
+        - Nach Deploy: URL notieren (z.B. https://voicecore-api.onrender.com)
+        - ACHTUNG: Free Tier schläft nach 15 Min Inaktivität ein (OK für PoC)
+
+  [ ] SCHRITT 3 – Frontend auf Netlify deployen
+        - Account auf netlify.com (kostenlos)
+        - New Site → GitHub-Repo verbinden
+        - Base directory: frontend
+        - netlify.toml wird automatisch gelesen
+        - Environment Variable in Netlify setzen:
+            Key:   VITE_API_URL
+            Value: https://voicecore-api.onrender.com  (URL aus Schritt 2!)
+
+  [ ] SCHRITT 4 – Cloud-Test
+        - Netlify-URL im Browser öffnen
+        - Aufnahme testen → Upload an Render-Backend
+        - iPhone-Test mit Kathrin (Safari, Mikrofon)
+
+━━━ PHASE 2 – Die Intelligenz (nach Cloud-PoC) ━━━━━━━━━━━━━━━
+
+  [ ] OpenAI Whisper API einbinden (Audio → Text)
+        - OPENAI_API_KEY als Render Environment Variable setzen
+        - backend/main.py: /upload ruft Whisper auf statt Stub-Response
+        - pip install openai → requirements.txt ergänzen
+
+  [ ] GPT für Post-Processing (Text → strukturierter Output)
+        - Templates einbetten (Tagebuch, Quick Note, Restaurant Review)
+        - GPT-Prompt je Template unterschiedlich
+
+━━━ PHASE 3 – Die Brücke ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ ] Google Docs API anbinden
+        - Google OAuth einrichten (Google Cloud Console)
+        - google-api-python-client in requirements.txt
+        - Append-Mode: Text ans Ende des jeweiligen Docs anhängen
+
+━━━ BEFEHLE ZUM NEUSTART (lokal) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Backend (PowerShell Terminal 1):
+    cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\backend"
+    .venv\Scripts\uvicorn main:app --reload --port 8000
+
+  Frontend (PowerShell Terminal 2):
+    cd "C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\frontend"
+    npm run dev
+
+  Browser: http://localhost:5173
+
+  FALLS .venv fehlt (nach Clone/Umzug):
+    python -m venv .venv
+    .venv\Scripts\pip install -r requirements.txt
+
+  FALLS npm Execution Policy Fehler:
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+═══════════════════════════════════════════════════════════════

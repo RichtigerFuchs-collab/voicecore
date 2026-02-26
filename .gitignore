@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Lokale Env-Variablen (kein Secret, aber lokal-spezifisch)
+.env.local
+
+# macOS
+.DS_Store
