@@ -184,10 +184,9 @@ export default function App() {
       {/* Antwort vom Backend */}
       {result && (
         <div style={styles.result}>
-          <p><strong>Job ID:</strong> {result.job_id}</p>
-          <p><strong>Template:</strong> {result.template}</p>
-          <p><strong>Dateigröße:</strong> {result.file_size_kb} KB</p>
-          <p style={{ color: '#006644' }}>{result.stub_response}</p>
+          <p style={styles.resultLabel}>Transkript</p>
+          <p style={styles.transcript}>{result.transcript}</p>
+          <p style={styles.meta}>{result.template} · {result.file_size_kb} KB</p>
         </div>
       )}
     </div>
@@ -255,5 +254,24 @@ const styles = {
     boxShadow:    '0 2px 10px rgba(0,0,0,0.1)',
     lineHeight:   1.7,
     fontSize:     '0.95rem',
+  },
+  resultLabel: {
+    fontSize:     '0.75rem',
+    fontWeight:   700,
+    textTransform: 'uppercase',
+    color:        '#888',
+    margin:       '0 0 0.5rem 0',
+    letterSpacing: '0.05em',
+  },
+  transcript: {
+    fontSize:   '1.05rem',
+    color:      '#1a1a2e',
+    margin:     '0 0 1rem 0',
+    whiteSpace: 'pre-wrap',
+  },
+  meta: {
+    fontSize: '0.8rem',
+    color:    '#aaa',
+    margin:   0,
   },
 }
