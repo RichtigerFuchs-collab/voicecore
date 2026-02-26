@@ -7,6 +7,7 @@ import google.generativeai as genai
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
@@ -86,3 +87,10 @@ async def upload_audio(
         "file_size_kb": file_size_kb,
         "transcript":  transcript,
     })
+
+# ─── Frontend (Production) ────────────────────────────────────────────────────
+# Muss nach allen API-Routen stehen, damit /health und /upload Vorrang haben.
+
+FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

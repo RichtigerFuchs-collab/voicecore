@@ -1,16 +1,17 @@
 services:
   - type: web
-    name: voicecore-api
+    name: voicecore
     runtime: python
     region: frankfurt
     plan: free
-    rootDir: backend
 
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: "cd frontend && npm ci && npm run build && cd ../backend && pip install -r requirements.txt"
+    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
 
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
+      - key: GEMINI_API_KEY
+        sync: false
 
     healthCheckPath: /health
