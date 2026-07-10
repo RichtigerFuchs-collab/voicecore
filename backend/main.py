@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.5.0")
+app = FastAPI(title="VoiceCore API", version="0.6.0")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -29,18 +29,24 @@ TEMPLATE_PROMPTS = {
         "Datum heute: {date}\n"
         "Verfasser:in des Eintrags: {speaker}\n\n"
         "Regeln:\n"
-        "- Tonalität: Behalte den persönlichen Stil der sprechenden Person bei. Nutze ihre "
-        "Adjektive und Ausdrücke. Schreibe in der Ich-Form.\n"
+        "- Tonalität: Behalte den persönlichen Stil der sprechenden Person bei. Bleib nah an "
+        "ihren emotionalen Originalformulierungen – besonders gefühlvolle oder markante Sätze "
+        "dürfen (leicht geglättet) wörtlich erhalten bleiben. Lieber die eigenen Worte der "
+        "Person als neutrale Umschreibungen. Schreibe in der Ich-Form.\n"
         "- Struktur: Gliedere den Text in drei logische Abschnitte: "
         "Was war los? (Ereignisse), Wie war es? (Emotionen & Atmosphäre), "
         "Gedanken danach (Reflexion & Erkenntnis).\n"
         "- Bereinigung: Entferne Füllwörter (äh, hm, halt, quasi), Wiederholungen und "
         "Satzkorrekturen, ohne den Sinn zu verändern.\n"
+        "- Datum der Titelzeile: Wenn im Transkript ein konkretes Datum oder ein relativer "
+        "Bezug genannt wird (z.B. 'am 8. Juli', 'gestern', 'letzten Samstag'), berechne das "
+        "gemeinte Datum ausgehend von heute ({date}) und verwende es in der Titelzeile. "
+        "Nur wenn nichts genannt wird oder 'heute' gesagt wird, nimm das heutige Datum.\n"
         "- Sprache: Antworte in der Sprache des Inputs (Deutsch oder Englisch).\n"
         "- Kein Markdown: Reiner Text ohne ## oder ** – der Eintrag landet in einem Google Doc.\n\n"
         "Output-Format (die erste Zeile exakt so aufbauen – Datum zuerst, dann Titel, "
         "dann Name in Klammern):\n"
-        "{date} – [Titel der Notiz, kreativ & passend] ({speaker})\n\n"
+        "[Datum, z.B. {date}] – [Titel der Notiz, kreativ & passend] ({speaker})\n\n"
         "Was war los?\n[Text]\n\n"
         "Wie war es?\n[Text]\n\n"
         "Gedanken danach\n[Text]"
@@ -132,9 +138,16 @@ class VoiceResult(BaseModel):
     formatted: str
 
 
+# Die App wird von Kim und Kathrin genutzt – Gemini verschreibt sich sonst gern (Katrin/Katrien).
+NAME_SPELLING_RULE = (
+    "Wichtig – Schreibweise von Namen: Die sprechenden bzw. erwähnten Personen heißen "
+    "Kim und Kathrin (Kathrin immer mit 'th', niemals 'Katrin'). Schreibe diese Namen exakt so."
+)
+
 TRANSCRIBE_ONLY_PROMPT = (
     "Transkribiere dieses Audio exakt. Gib nur den gesprochenen Text zurück, "
-    "ohne Kommentare oder Erklärungen."
+    "ohne Kommentare oder Erklärungen.\n\n"
+    f"{NAME_SPELLING_RULE}"
 )
 
 def build_combined_prompt(template_prompt: str) -> str:
@@ -145,7 +158,8 @@ def build_combined_prompt(template_prompt: str) -> str:
         "1. \"transcript\": Transkribiere das Audio exakt. Nur der gesprochene Text, "
         "ohne Kommentare oder Erklärungen.\n\n"
         "2. \"formatted\": Verarbeite den transkribierten Text nach folgender Anweisung:\n\n"
-        f"{template_prompt}"
+        f"{template_prompt}\n\n"
+        f"{NAME_SPELLING_RULE} Das gilt für beide Felder, transcript und formatted."
     )
 
 # ─── Google Docs Helpers ───────────────────────────────────────────────────────
@@ -201,7 +215,12 @@ def write_to_google_doc(doc_id: str, template: str, formatted_text: str) -> bool
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "gemini": bool(GEMINI_API_KEY), "model": GEMINI_MODEL}
+    return {
+        "status":  "ok",
+        "version": app.version,
+        "gemini":  bool(GEMINI_API_KEY),
+        "model":   GEMINI_MODEL,
+    }
 
 
 @app.post("/upload")
