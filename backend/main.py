@@ -26,19 +26,24 @@ TEMPLATE_PROMPTS = {
     "tagebuch": (
         "Du bist ein empathischer Tagebuch-Assistent. Deine Aufgabe ist es, gesprochene Gedanken "
         "in eine strukturierte, schriftliche Form zu bringen.\n\n"
-        "Datum heute: {date}\n\n"
+        "Datum heute: {date}\n"
+        "Verfasser:in des Eintrags: {speaker}\n\n"
         "Regeln:\n"
-        "- Tonalität: Behalte den persönlichen Stil der Sprecherin bei. Nutze ihre Adjektive und "
-        "Ausdrücke. Schreibe in der Ich-Form.\n"
+        "- Tonalität: Behalte den persönlichen Stil der sprechenden Person bei. Nutze ihre "
+        "Adjektive und Ausdrücke. Schreibe in der Ich-Form.\n"
         "- Struktur: Gliedere den Text in drei logische Abschnitte: "
-        "**Was war los?** (Ereignisse), **Wie war es?** (Emotionen & Atmosphäre), "
-        "**Gedanken danach** (Reflexion & Erkenntnis).\n"
+        "Was war los? (Ereignisse), Wie war es? (Emotionen & Atmosphäre), "
+        "Gedanken danach (Reflexion & Erkenntnis).\n"
         "- Bereinigung: Entferne Füllwörter (äh, hm, halt, quasi), Wiederholungen und "
         "Satzkorrekturen, ohne den Sinn zu verändern.\n"
-        "- Sprache: Antworte in der Sprache des Inputs (Deutsch oder Englisch).\n\n"
-        "Output-Format:\n"
-        "## [Titel der Notiz – kreativ & passend]\n\n"
-        "[Text in Absätzen]"
+        "- Sprache: Antworte in der Sprache des Inputs (Deutsch oder Englisch).\n"
+        "- Kein Markdown: Reiner Text ohne ## oder ** – der Eintrag landet in einem Google Doc.\n\n"
+        "Output-Format (die erste Zeile exakt so aufbauen – Datum zuerst, dann Titel, "
+        "dann Name in Klammern):\n"
+        "{date} – [Titel der Notiz, kreativ & passend] ({speaker})\n\n"
+        "Was war los?\n[Text]\n\n"
+        "Wie war es?\n[Text]\n\n"
+        "Gedanken danach\n[Text]"
     ),
     "quick_note": (
         "Du bist ein hocheffizienter Notiz-Assistent für Business und kreative Ideen. "
@@ -53,16 +58,38 @@ TEMPLATE_PROMPTS = {
     ),
     "restaurant_review": (
         "Du wandelst gesprochene Eindrücke nach einem Restaurantbesuch in eine strukturierte "
-        "Bewertung um.\n\n"
-        "Erstelle die Bewertung in der Sprache des Inputs mit folgenden fünf Abschnitten. "
-        "Leite für jeden Abschnitt aus dem Transkript eine Sternebewertung ab "
-        "(★☆☆☆☆ bis ★★★★★). Wenn ein Aspekt nicht erwähnt wird, lasse ihn weg.\n\n"
-        "i. **Essen** – Geschmack & Qualität\n"
-        "ii. **Ambiente** – Atmosphäre & Einrichtung\n"
-        "iii. **Service** – Freundlichkeit & Aufmerksamkeit\n"
-        "iv. **Preis-Leistung** – Gefühl für den Wert des Essens\n"
-        "v. **Besonderheit** – Einzigartigkeit oder Erinnerungspotenzial\n\n"
-        "Füge am Ende eine **Gesamtbewertung** (★☆☆☆☆–★★★★★) als Durchschnitt hinzu."
+        "Bewertung um. Halte dich exakt an das Layout des folgenden Beispiels: passendes "
+        "Essens-Emoji vor dem Restaurantnamen, Sterne mit ⭐️ (½ für halbe Sterne) auf eigener "
+        "Zeile, danach 1–2 Sätze pro Kategorie. Kein Markdown – reiner Text.\n\n"
+        "Beispiel-Layout:\n"
+        "🍝 DA's Lupo – Köln (Juni 2025)\n"
+        "1. Essen – Geschmack & Qualität:\n"
+        "⭐️⭐️⭐️⭐️½\n"
+        "Sehr, sehr lecker! Besonders die Pasta mit Pilzen und Tomate-Burrata sowie die "
+        "überbackenen Ravioli haben euch überzeugt.\n"
+        "2. Ambiente – Atmosphäre & Einrichtung:\n"
+        "⭐️⭐️⭐️⭐️\n"
+        "Ihr habt draußen gesessen, innen war es aber ebenfalls sehr schön. Wie gewohnt bei "
+        "Massimo: gemütlich und stimmungsvoll.\n"
+        "3. Service – Freundlichkeit & Aufmerksamkeit:\n"
+        "⭐️⭐️⭐️\n"
+        "Aufmerksam, aber etwas zu flott im Servieren – das wirkte leicht gehetzt.\n"
+        "4. Preis-Leistung – Gefühl für den Wert des Essens:\n"
+        "⭐️⭐️⭐️⭐️⭐️\n"
+        "Top! 80 € für zwei Hauptgerichte, eine Vorspeise und eine Flasche Wein – sogar "
+        "günstiger als das Tarnika.\n"
+        "5. Besonderheit – Einzigartigkeit oder Erinnerungspotenzial:\n"
+        "⭐️⭐️⭐️⭐️\n"
+        "Die in Tempura gebackene Zucchini-Vorspeise war ein echtes Highlight. Außerdem eine "
+        "schöne Unterhaltung mit dem Nebentisch.\n\n"
+        "Regeln:\n"
+        "- Erste Zeile: Emoji passend zur Küche, Restaurantname, Stadt (falls genannt), "
+        "dahinter in Klammern: ({month_year})\n"
+        "- Alle fünf Kategorien in dieser Reihenfolge. Wird ein Aspekt gar nicht erwähnt, "
+        "lasse die Kategorie weg.\n"
+        "- Anrede wie im Beispiel (ihr/euch), wenn mehrere Personen dabei waren – sonst du-Form.\n"
+        "- Sternebewertungen aus dem Transkript ableiten, halbe Sterne mit ½.\n"
+        "- Sprache des Inputs verwenden."
     ),
 }
 
@@ -182,6 +209,7 @@ async def upload_audio(
     audio: UploadFile = File(...),
     template: str = Form(...),
     destination_url: str = Form(default=""),
+    speaker: str = Form(default=""),
 ):
     content_type = audio.content_type or ""
     if not content_type.startswith("audio/"):
@@ -192,10 +220,11 @@ async def upload_audio(
 
     job_id      = str(uuid.uuid4())
     audio_bytes = await audio.read()
+    speaker     = speaker.strip() or "unbekannt"
 
     file_size_kb = round(len(audio_bytes) / 1024, 1)
 
-    print(f"[VoiceCore] Job: {job_id} | Template: {template} | {file_size_kb} KB | {content_type}")
+    print(f"[VoiceCore] Job: {job_id} | Template: {template} | Sprecher:in: {speaker} | {file_size_kb} KB | {content_type}")
 
     # ── Transkription + Formatierung in EINEM Gemini-Call ─────────────────
     transcript = None
@@ -211,8 +240,13 @@ async def upload_audio(
         prompt_template = TEMPLATE_PROMPTS.get(template)
         try:
             if prompt_template:
+                today  = date.today()
                 prompt = build_combined_prompt(
-                    prompt_template.format(date=format_german_date(date.today()))
+                    prompt_template.format(
+                        date=format_german_date(today),
+                        speaker=speaker,
+                        month_year=f"{GERMAN_MONTHS[today.month - 1]} {today.year}",
+                    )
                 )
                 response = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,

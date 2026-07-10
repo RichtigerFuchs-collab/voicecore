@@ -10,6 +10,8 @@ const TEMPLATES = [
   { id: 'restaurant_review', label: 'Restaurant Review' },
 ]
 
+const SPEAKERS = ['Kim', 'Kathrin']
+
 // Safari unterstützt kein audio/webm, aber audio/mp4.
 // Chrome/Android nimmt audio/webm;codecs=opus.
 // Wir prüfen zur Laufzeit, was der Browser kann.
@@ -45,6 +47,10 @@ export default function App() {
   const [result, setResult]     = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
 
+  const [speaker, setSpeaker] = useState(() =>
+    localStorage.getItem('voicecore_speaker') || SPEAKERS[0]
+  )
+
   const [showSettings, setShowSettings] = useState(false)
   const [destinations, setDestinations] = useState(() => {
     try { return JSON.parse(localStorage.getItem('voicecore_destinations')) || {} }
@@ -61,6 +67,11 @@ export default function App() {
     const updated = { ...destinations, [templateId]: url }
     setDestinations(updated)
     localStorage.setItem('voicecore_destinations', JSON.stringify(updated))
+  }
+
+  function selectSpeaker(name) {
+    setSpeaker(name)
+    localStorage.setItem('voicecore_speaker', name)
   }
 
   // ── Aufnahme starten ─────────────────────────────────────────────────────
@@ -134,6 +145,7 @@ export default function App() {
     formData.append('audio', audioBlob, `recording.${ext}`)
     formData.append('template', template)
     formData.append('destination_url', destinations[template] || '')
+    formData.append('speaker', speaker)
 
     try {
       const response = await fetch(`${API_URL}/upload`, {
@@ -192,6 +204,23 @@ export default function App() {
           ))}
         </div>
       )}
+
+      {/* Sprecher-Auswahl */}
+      <div style={styles.speakerRow}>
+        {SPEAKERS.map(name => (
+          <button
+            key={name}
+            onClick={() => selectSpeaker(name)}
+            disabled={isDisabled || isRecording}
+            style={{
+              ...styles.speakerButton,
+              ...(speaker === name ? styles.speakerActive : {}),
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
 
       {/* Template-Auswahl */}
       <select
@@ -327,6 +356,25 @@ const styles = {
     border:       '1px solid #ccc',
     width:        '100%',
     boxSizing:    'border-box',
+  },
+  speakerRow: {
+    display: 'flex',
+    gap:     '0.5rem',
+  },
+  speakerButton: {
+    padding:      '0.5rem 1.75rem',
+    borderRadius: '999px',
+    border:       '2px solid #1a1a2e',
+    background:   '#fff',
+    color:        '#1a1a2e',
+    fontSize:     '1rem',
+    fontWeight:   600,
+    cursor:       'pointer',
+    transition:   'all 0.15s ease',
+  },
+  speakerActive: {
+    background: '#1a1a2e',
+    color:      '#fff',
   },
   select: {
     fontSize:     '1.1rem',
