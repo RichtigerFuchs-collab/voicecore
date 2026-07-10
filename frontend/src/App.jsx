@@ -45,9 +45,23 @@ export default function App() {
   const [result, setResult]     = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
 
+  const [showSettings, setShowSettings] = useState(false)
+  const [destinations, setDestinations] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('voicecore_destinations')) || {} }
+    catch { return {} }
+  })
+
   // Refs für Werte die kein Re-Render auslösen sollen
   const mediaRecorderRef = useRef(null)
   const audioChunksRef   = useRef([])
+
+  // ── Destinations persistieren ────────────────────────────────────────────
+
+  function updateDestination(templateId, url) {
+    const updated = { ...destinations, [templateId]: url }
+    setDestinations(updated)
+    localStorage.setItem('voicecore_destinations', JSON.stringify(updated))
+  }
 
   // ── Aufnahme starten ─────────────────────────────────────────────────────
 
@@ -119,6 +133,7 @@ export default function App() {
     const formData = new FormData()
     formData.append('audio', audioBlob, `recording.${ext}`)
     formData.append('template', template)
+    formData.append('destination_url', destinations[template] || '')
 
     try {
       const response = await fetch(`${API_URL}/upload`, {
@@ -146,7 +161,37 @@ export default function App() {
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.title}>VoiceCore</h1>
+
+      {/* Header */}
+      <div style={styles.header}>
+        <h1 style={styles.title}>VoiceCore</h1>
+        <button
+          onClick={() => setShowSettings(s => !s)}
+          style={styles.gearButton}
+          title="Einstellungen"
+        >
+          ⚙
+        </button>
+      </div>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div style={styles.settingsPanel}>
+          <p style={styles.settingsTitle}>Google Docs Ziele</p>
+          {TEMPLATES.map(t => (
+            <div key={t.id} style={styles.settingsRow}>
+              <label style={styles.settingsLabel}>{t.label} → Google Doc</label>
+              <input
+                type="url"
+                placeholder="https://docs.google.com/document/d/..."
+                value={destinations[t.id] || ''}
+                onChange={e => updateDestination(t.id, e.target.value)}
+                style={styles.settingsInput}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Template-Auswahl */}
       <select
@@ -184,9 +229,28 @@ export default function App() {
       {/* Antwort vom Backend */}
       {result && (
         <div style={styles.result}>
-          <p style={styles.resultLabel}>Transkript</p>
-          <p style={styles.transcript}>{result.transcript}</p>
+          {result.formatted ? (
+            <>
+              <p style={styles.resultLabel}>{TEMPLATES.find(t => t.id === result.template)?.label}</p>
+              <div style={styles.formatted}>{result.formatted}</div>
+              <details style={styles.details}>
+                <summary style={styles.summary}>Rohes Transkript</summary>
+                <p style={styles.transcript}>{result.transcript}</p>
+              </details>
+            </>
+          ) : (
+            <>
+              <p style={styles.resultLabel}>Transkript</p>
+              <p style={styles.transcript}>{result.transcript}</p>
+            </>
+          )}
           <p style={styles.meta}>{result.template} · {result.file_size_kb} KB</p>
+          {result.doc_written === true && (
+            <p style={styles.docSuccess}>✓ Gespeichert in Google Doc</p>
+          )}
+          {result.doc_written === false && destinations[result.template] && (
+            <p style={styles.docWarning}>⚠ Google Doc konnte nicht beschrieben werden</p>
+          )}
         </div>
       )}
     </div>
@@ -207,11 +271,62 @@ const styles = {
     fontFamily:     'system-ui, -apple-system, sans-serif',
     gap:            '1.5rem',
   },
+  header: {
+    display:    'flex',
+    alignItems: 'center',
+    gap:        '0.75rem',
+  },
   title: {
     fontSize:   '2rem',
     fontWeight: 700,
     color:      '#1a1a2e',
     margin:     0,
+  },
+  gearButton: {
+    background: 'none',
+    border:     'none',
+    fontSize:   '1.4rem',
+    cursor:     'pointer',
+    padding:    '0.25rem',
+    color:      '#888',
+    lineHeight: 1,
+  },
+  settingsPanel: {
+    background:    '#fff',
+    borderRadius:  '12px',
+    padding:       '1.25rem',
+    width:         '100%',
+    maxWidth:      '320px',
+    boxShadow:     '0 2px 10px rgba(0,0,0,0.1)',
+    display:       'flex',
+    flexDirection: 'column',
+    gap:           '0.75rem',
+  },
+  settingsTitle: {
+    fontSize:      '0.75rem',
+    fontWeight:    700,
+    textTransform: 'uppercase',
+    color:         '#888',
+    margin:        0,
+    letterSpacing: '0.05em',
+  },
+  settingsRow: {
+    display:       'flex',
+    flexDirection: 'column',
+    gap:           '0.3rem',
+  },
+  settingsLabel: {
+    fontSize:   '0.85rem',
+    color:      '#444',
+    fontWeight: 600,
+  },
+  settingsInput: {
+    fontSize:     '0.85rem',
+    padding:      '0.5rem 0.75rem',
+    borderRadius: '6px',
+    border:       '1px solid #ccc',
+    width:        '100%',
+    boxSizing:    'border-box',
   },
   select: {
     fontSize:     '1.1rem',
@@ -263,15 +378,43 @@ const styles = {
     margin:       '0 0 0.5rem 0',
     letterSpacing: '0.05em',
   },
-  transcript: {
+  formatted: {
     fontSize:   '1.05rem',
     color:      '#1a1a2e',
     margin:     '0 0 1rem 0',
     whiteSpace: 'pre-wrap',
+    lineHeight: 1.8,
+  },
+  details: {
+    marginBottom: '1rem',
+  },
+  summary: {
+    fontSize:  '0.8rem',
+    color:     '#888',
+    cursor:    'pointer',
+    marginBottom: '0.5rem',
+  },
+  transcript: {
+    fontSize:   '0.9rem',
+    color:      '#888',
+    margin:     '0.5rem 0 0 0',
+    whiteSpace: 'pre-wrap',
+    lineHeight: 1.6,
   },
   meta: {
     fontSize: '0.8rem',
     color:    '#aaa',
     margin:   0,
+  },
+  docSuccess: {
+    fontSize:   '0.8rem',
+    color:      '#2a9d5c',
+    margin:     '0.25rem 0 0 0',
+    fontWeight: 600,
+  },
+  docWarning: {
+    fontSize: '0.8rem',
+    color:    '#e07b00',
+    margin:   '0.25rem 0 0 0',
   },
 }

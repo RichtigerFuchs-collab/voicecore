@@ -1,0 +1,17 @@
+# Hält den Render Free-Tier-Service wach, damit deine Freundin nie auf einen
+# Cold Start (~50 s) warten muss. GitHub cron feuert frühestens alle 5 Minuten
+# und manchmal mit Verzögerung – 10-Minuten-Takt reicht, Render schläft erst
+# nach 15 Minuten Inaktivität ein.
+name: Keep Render awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: curl --silent --fail --max-time 30 https://voicecore.onrender.com/health

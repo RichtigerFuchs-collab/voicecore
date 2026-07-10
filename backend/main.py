@@ -1,17 +1,70 @@
+import json
 import os
+import re
 import uuid
-import shutil
+from datetime import datetime, date
 from pathlib import Path
 
-import google.generativeai as genai
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from google import genai
+from google.genai import types
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from pydantic import BaseModel
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.2.0")
+app = FastAPI(title="VoiceCore API", version="0.5.0")
+
+# ─── Template-Prompts ─────────────────────────────────────────────────────────
+
+TEMPLATE_PROMPTS = {
+    "tagebuch": (
+        "Du bist ein empathischer Tagebuch-Assistent. Deine Aufgabe ist es, gesprochene Gedanken "
+        "in eine strukturierte, schriftliche Form zu bringen.\n\n"
+        "Datum heute: {date}\n\n"
+        "Regeln:\n"
+        "- Tonalität: Behalte den persönlichen Stil der Sprecherin bei. Nutze ihre Adjektive und "
+        "Ausdrücke. Schreibe in der Ich-Form.\n"
+        "- Struktur: Gliedere den Text in drei logische Abschnitte: "
+        "**Was war los?** (Ereignisse), **Wie war es?** (Emotionen & Atmosphäre), "
+        "**Gedanken danach** (Reflexion & Erkenntnis).\n"
+        "- Bereinigung: Entferne Füllwörter (äh, hm, halt, quasi), Wiederholungen und "
+        "Satzkorrekturen, ohne den Sinn zu verändern.\n"
+        "- Sprache: Antworte in der Sprache des Inputs (Deutsch oder Englisch).\n\n"
+        "Output-Format:\n"
+        "## [Titel der Notiz – kreativ & passend]\n\n"
+        "[Text in Absätzen]"
+    ),
+    "quick_note": (
+        "Du bist ein hocheffizienter Notiz-Assistent für Business und kreative Ideen. "
+        "Deine Aufgabe ist es, schnelle Sprachnotizen in ein strukturiertes Protokoll zu verwandeln.\n\n"
+        "Struktur:\n"
+        "- **TL;DR:** Ein bis zwei prägnante Sätze als Zusammenfassung ganz oben.\n"
+        "- **Kernaussagen:** Stichpunkte mit kurzen, erklärenden Sätzen (keine bloßen Schlagworte).\n"
+        "- **Action Items:** Falls Aufgaben oder nächste Schritte erkennbar sind, liste diese separat auf.\n"
+        "- **Tags:** Generiere 3–5 relevante Hashtags am Ende (z.B. #ProjectA, #Idea, #Meeting).\n\n"
+        "Besonderheit: Wenn der Input ein Mix aus Deutsch und Englisch ist, erstelle die "
+        "Zusammenfassung in der dominanten Sprache, halte aber Fachbegriffe im Original fest."
+    ),
+    "restaurant_review": (
+        "Du wandelst gesprochene Eindrücke nach einem Restaurantbesuch in eine strukturierte "
+        "Bewertung um.\n\n"
+        "Erstelle die Bewertung in der Sprache des Inputs mit folgenden fünf Abschnitten. "
+        "Leite für jeden Abschnitt aus dem Transkript eine Sternebewertung ab "
+        "(★☆☆☆☆ bis ★★★★★). Wenn ein Aspekt nicht erwähnt wird, lasse ihn weg.\n\n"
+        "i. **Essen** – Geschmack & Qualität\n"
+        "ii. **Ambiente** – Atmosphäre & Einrichtung\n"
+        "iii. **Service** – Freundlichkeit & Aufmerksamkeit\n"
+        "iv. **Preis-Leistung** – Gefühl für den Wert des Essens\n"
+        "v. **Besonderheit** – Einzigartigkeit oder Erinnerungspotenzial\n\n"
+        "Füge am Ende eine **Gesamtbewertung** (★☆☆☆☆–★★★★★) als Durchschnitt hinzu."
+    ),
+}
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,14 +74,101 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = Path("/tmp/voicecore_uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+GOOGLE_DOCS_SCOPES = ["https://www.googleapis.com/auth/documents"]
+
+TEMPLATE_LABELS = {
+    "tagebuch":          "Tagebuch",
+    "quick_note":        "Quick Note",
+    "restaurant_review": "Restaurant Review",
+}
+
+# Deutsche Monatsnamen, unabhängig vom Server-Locale.
+# (strftime "%-d" crasht unter Windows, "%B" liefert auf Render Englisch.)
+GERMAN_MONTHS = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+]
+
+def format_german_date(d: date) -> str:
+    return f"{d.day}. {GERMAN_MONTHS[d.month - 1]} {d.year}"
+
+
+class VoiceResult(BaseModel):
+    """Strukturierte Antwort des kombinierten Gemini-Calls."""
+    transcript: str
+    formatted: str
+
+
+TRANSCRIBE_ONLY_PROMPT = (
+    "Transkribiere dieses Audio exakt. Gib nur den gesprochenen Text zurück, "
+    "ohne Kommentare oder Erklärungen."
+)
+
+def build_combined_prompt(template_prompt: str) -> str:
+    """Ein Call statt zwei: Transkription + Formatierung in einer Anfrage."""
+    return (
+        "Du erhältst eine Audio-Sprachnachricht. Erledige zwei Aufgaben und "
+        "antworte als JSON mit den Feldern \"transcript\" und \"formatted\":\n\n"
+        "1. \"transcript\": Transkribiere das Audio exakt. Nur der gesprochene Text, "
+        "ohne Kommentare oder Erklärungen.\n\n"
+        "2. \"formatted\": Verarbeite den transkribierten Text nach folgender Anweisung:\n\n"
+        f"{template_prompt}"
+    )
+
+# ─── Google Docs Helpers ───────────────────────────────────────────────────────
+
+def extract_doc_id(url: str) -> str | None:
+    """Extrahiert die Google Docs Document-ID aus einer URL. Gibt None zurück wenn kein Match."""
+    if not url:
+        return None
+    match = re.search(r"docs\.google\.com/document/d/([a-zA-Z0-9_-]+)", url)
+    return match.group(1) if match else None
+
+
+def write_to_google_doc(doc_id: str, template: str, formatted_text: str) -> bool:
+    """Fügt einen neuen Eintrag am Anfang des Google Docs ein. Gibt True bei Erfolg zurück."""
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Docs] GOOGLE_SERVICE_ACCOUNT_JSON nicht gesetzt – übersprungen")
+        return False
+
+    try:
+        sa_info     = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info, scopes=GOOGLE_DOCS_SCOPES,
+        )
+        service  = build("docs", "v1", credentials=credentials)
+
+        label    = TEMPLATE_LABELS.get(template, template)
+        now      = datetime.now()
+        date_str = format_german_date(now.date())
+        time_str = now.strftime("%H:%M")
+
+        separator = "────────────────────────────────────"
+        content   = f"{separator}\n{label} · {date_str} · {time_str}\n\n{formatted_text}\n\n\n"
+
+        service.documents().batchUpdate(
+            documentId=doc_id,
+            body={"requests": [{"insertText": {"location": {"index": 1}, "text": content}}]},
+        ).execute()
+
+        print(f"[Docs] Geschrieben in Doc {doc_id[:8]}...")
+        return True
+
+    except json.JSONDecodeError as e:
+        print(f"[Docs] Ungültiges GOOGLE_SERVICE_ACCOUNT_JSON: {e}")
+        return False
+    except HttpError as e:
+        print(f"[Docs] Google API Fehler {e.status_code}: {e.reason}")
+        return False
+    except Exception as e:
+        print(f"[Docs] Unerwarteter Fehler: {e}")
+        return False
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -41,6 +181,7 @@ def health_check():
 async def upload_audio(
     audio: UploadFile = File(...),
     template: str = Form(...),
+    destination_url: str = Form(default=""),
 ):
     content_type = audio.content_type or ""
     if not content_type.startswith("audio/"):
@@ -49,43 +190,73 @@ async def upload_audio(
             detail=f"Audio-Datei erwartet, erhalten: {content_type}"
         )
 
-    job_id    = str(uuid.uuid4())
-    suffix    = Path(audio.filename or "recording.webm").suffix or ".webm"
-    save_path = UPLOAD_DIR / f"{job_id}{suffix}"
+    job_id      = str(uuid.uuid4())
+    audio_bytes = await audio.read()
 
-    with save_path.open("wb") as buffer:
-        shutil.copyfileobj(audio.file, buffer)
-
-    file_size_kb = round(save_path.stat().st_size / 1024, 1)
+    file_size_kb = round(len(audio_bytes) / 1024, 1)
 
     print(f"[VoiceCore] Job: {job_id} | Template: {template} | {file_size_kb} KB | {content_type}")
 
-    # ── Transkription via Gemini ───────────────────────────────────────────
-    if not GEMINI_API_KEY:
+    # ── Transkription + Formatierung in EINEM Gemini-Call ─────────────────
+    transcript = None
+    formatted  = None
+
+    if not gemini_client:
         transcript = "[GEMINI_API_KEY fehlt – bitte in Render setzen]"
     else:
-        try:
-            uploaded_file = genai.upload_file(path=str(save_path), mime_type=content_type)
-            model         = genai.GenerativeModel(GEMINI_MODEL)
-            response      = model.generate_content([
-                uploaded_file,
-                "Transkribiere dieses Audio exakt. Gib nur den gesprochenen Text zurück, ohne Kommentare oder Erklärungen.",
-            ])
-            transcript = response.text.strip()
-            genai.delete_file(uploaded_file.name)
-            print(f"  Transkript: {transcript[:80]}...")
-        except Exception as e:
-            print(f"  Fehler: {e}")
-            transcript = f"[Fehler bei Transkription: {e}]"
+        # Codec-Parameter abschneiden: "audio/webm;codecs=opus" → "audio/webm"
+        mime_type  = content_type.split(";")[0].strip()
+        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
 
-    save_path.unlink(missing_ok=True)
+        prompt_template = TEMPLATE_PROMPTS.get(template)
+        try:
+            if prompt_template:
+                prompt = build_combined_prompt(
+                    prompt_template.format(date=format_german_date(date.today()))
+                )
+                response = gemini_client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=[audio_part, prompt],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=VoiceResult,
+                    ),
+                )
+                result = response.parsed
+                if result is None:
+                    raise ValueError("Gemini lieferte kein gültiges JSON")
+                transcript = result.transcript.strip()
+                formatted  = result.formatted.strip()
+                print(f"  Transkript: {transcript[:80]}...")
+                print(f"  Formatiert ({template}): {formatted[:80]}...")
+            else:
+                response = gemini_client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=[audio_part, TRANSCRIBE_ONLY_PROMPT],
+                )
+                transcript = response.text.strip()
+                print(f"  Transkript: {transcript[:80]}...")
+        except Exception as e:
+            print(f"  Fehler bei Verarbeitung: {e}")
+            transcript = f"[Fehler bei Transkription: {e}]"
+            formatted  = None
+    # ── Google Docs Write ──────────────────────────────────────────────────
+    doc_written = False
+    if destination_url and formatted:
+        doc_id = extract_doc_id(destination_url)
+        if doc_id:
+            doc_written = write_to_google_doc(doc_id, template, formatted)
+        else:
+            print(f"[Docs] Konnte Doc-ID nicht aus URL extrahieren: {destination_url}")
     # ─────────────────────────────────────────────────────────────────────
 
     return JSONResponse({
-        "job_id":      job_id,
-        "template":    template,
+        "job_id":       job_id,
+        "template":     template,
         "file_size_kb": file_size_kb,
-        "transcript":  transcript,
+        "transcript":   transcript,
+        "formatted":    formatted,
+        "doc_written":  doc_written,
     })
 
 # ─── Frontend (Production) ────────────────────────────────────────────────────
