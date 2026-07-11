@@ -1,100 +1,87 @@
 ═══════════════════════════════════════════════════════════════
-  VOICECORE V1 – FORTSCHRITT
-  Stand: 26.02.2026
+  VOICECORE – FORTSCHRITT
+  Stand: 11.07.2026 · Version 0.6.0 · ALLE PHASEN ABGESCHLOSSEN
 ═══════════════════════════════════════════════════════════════
 
-━━━ WAS WIR BAUEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Voice-Processing-System: Sprache → Whisper/Gemini → GPT → Google Docs
-Phase 1+2 (erledigt): Mikrofon → Upload → Gemini Transkription (Cloud)
+━━━ WAS WIR GEBAUT HABEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+One-Click-Sprachnotiz-App für Kim & Kathrin:
+Sprache → Gemini (Transkript + Formatierung in EINEM Call) → Google Docs
+Drei Templates: Tagebuch, Quick Note, Restaurant Review.
+PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
 
-━━━ TECHNISCHER STACK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Frontend : React + Vite (gebaut, dist/ eingecheckt)
-  Backend  : FastAPI + Python + Gemini 2.5 Flash API
-  Hosting  : Render.com (Frontend + Backend in EINEM Service)
-  Pfad     : C:\Users\Kim\OneDrive\Dokumente\Archiv\2020\Dokumente\Claude\voicecore\
+→ Vollständige Doku (Features, Technik, API, Design-Entscheidungen):
+  README.md ← DORT ZUERST LESEN
 
-━━━ LIVE URL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ TECHNISCHER STACK (Kurzfassung) ━━━━━━━━━━━━━━━━━━━━━━━━━
+  Frontend : React + Vite, dist/ EINGECHECKT (nach Änderungen: npm run build!)
+  Backend  : FastAPI + Python 3.11
+  KI       : google-genai SDK (NICHT das alte google-generativeai – deprecated!)
+             Modell: gemini-3.1-flash-lite (stabil)
+  Docs     : Service Account, Env GOOGLE_SERVICE_ACCOUNT_JSON auf Render
+  Hosting  : Render.com Free, EIN Service für Frontend+Backend
+  Cold Start: GitHub Actions pingt alle 10 Min /health (keepalive.yml)
+
+━━━ LIVE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   App      : https://voicecore.onrender.com
   GitHub   : https://github.com/RichtigerFuchs-collab/voicecore
+  Deploy   : git push auf master → Render deployed automatisch (2-3 Min)
+  Prüfung  : curl https://voicecore.onrender.com/health → "version" checken
 
-━━━ PROJEKTSTRUKTUR ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  voicecore/
-  ├── main.py               ← Einstiegspunkt fuer Render (importiert backend.main)
-  ├── render.yaml           ← Render.com Config
-  ├── requirements.txt      ← Kopie von backend/requirements.txt (Render braucht das)
-  ├── FORTSCHRITT.txt
-  ├── README.md
-  ├── .gitignore
-  ├── backend/
-  │   ├── __init__.py       ← macht backend zu Python-Paket
-  │   ├── main.py           ← FastAPI: /health + /upload + Gemini + Static Files
-  │   ├── requirements.txt
-  │   └── .venv/            ← nicht in git!
-  └── frontend/
-      ├── dist/             ← EINGECHECKT! Muss nach Aenderungen neu gebaut werden
-      ├── vite.config.js
-      ├── .env.local        ← VITE_API_URL=http://localhost:8000
-      ├── .env.production   ← VITE_API_URL=https://voicecore.onrender.com
-      ├── package.json
-      └── src/
-          ├── App.jsx
-          └── main.jsx
+━━━ ITERATIONSHISTORIE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-━━━ RENDER.COM EINSTELLUNGEN (Dashboard) ━━━━━━━━━━━━━━━━━━━━
-  Root Directory : (leer)
-  Build Command  : pip install -r requirements.txt
-  Start Command  : uvicorn main:app --host 0.0.0.0 --port $PORT
-  Env Variables  : GEMINI_API_KEY = [gesetzt]
+  It. 1 · Feb 2026 · PoC "Das Rohr"
+    Mikrofon → Upload → Gemini-Transkript sichtbar (7921c56)
 
-━━━ ERLEDIGTE SCHRITTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  It. 2 · Feb 2026 · Deployment-Härtung
+    Frontend+Backend in einen Render-Service, dist/ eingecheckt,
+    Root-main.py + Root-requirements.txt (480bd9c…5867b51)
 
-  ✓ Phase 1: Frontend + Backend lokal funktionierend
-  ✓ GitHub CLI installiert, Repo erstellt (RichtigerFuchs-collab/voicecore)
-  ✓ Backend auf Render.com deployed
-  ✓ Frontend + Backend in EINEM Render-Service zusammengeführt
-  ✓ Phase 2: Gemini 2.5 Flash Transkription funktioniert
-  ✓ VOLLTEST ERFOLGREICH: Aufnahme → Upload → Transkript sichtbar
+  It. 3 · Mär 2026 · Templates & Docs-Code
+    3 Template-Prompts, Google-Docs-Write per Service Account,
+    Settings-Panel – Code fertig, noch nicht deployed
 
-━━━ OFFENE SCHRITTE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  It. 4 · 10.07.2026 · Modernisierung & Live-Gang (f39e5ed)
+    SDK-Migration google-genai, stabiles Modell, EIN Gemini-Call
+    statt zwei, Datums-/Locale-Fix, Root-requirements-Bug gefixt
+    (google-auth + api-python-client fehlten → wäre gecrasht),
+    Keep-alive-Workflow, live geschaltet + end-to-end getestet
 
-  [ ] PHASE 2b – GPT/Gemini Post-Processing
-        - Templates einbetten (Tagebuch, Quick Note, Restaurant Review)
-        - Gemini formatiert den transkribierten Text je nach Template
-        - z.B. Tagebuch → schöner Fliesstext, Quick Note → Stichpunkte
+  It. 5 · 10.07.2026 · Personalisierung (b8ed5fe)
+    Kim/Kathrin-Umschalter (localStorage), Datum ZUERST im
+    Tagebuch-Titel, Restaurant-Review nach Standardlayout des
+    bestehenden Docs, Markdown aus Output entfernt (## und **
+    erschienen im Google Doc als sichtbare Zeichen)
 
-  [ ] PHASE 3 – Google Docs API
-        - Google OAuth einrichten (Google Cloud Console)
-        - google-api-python-client in requirements.txt
-        - Append-Mode: Text ans Ende des jeweiligen Docs anhängen
+  It. 6 · 11.07.2026 · Feinschliff nach echtem Nutzertest (dfcfb64)
+    Emotionalere Tagebuch-Texte (nah an Originalformulierungen),
+    NAME_SPELLING_RULE (Kathrin IMMER mit th), gesprochene
+    Datumsangaben ("am 8. Juli", "gestern") schlagen das heutige
+    Datum in der Titelzeile, /health zeigt Version
 
-━━━ BEFEHLE (lokal) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
-  Backend starten:
-    cd "...\voicecore\backend"
-    .venv\Scripts\uvicorn main:app --reload --port 8000
+  1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,
+     Prompts, UI, Doku. Ist in backend/main.py als
+     NAME_SPELLING_RULE verankert.
+  2. Root-requirements.txt IDENTISCH mit backend/requirements.txt
+     halten – Render installiert die Root-Datei!
+  3. Nach Frontend-Änderungen IMMER: npm run build --prefix frontend
+     (dist/ ist eingecheckt), sonst geht alter Stand live.
+  4. Tagebuch-Emotionalität nicht wegoptimieren – Kim will die
+     Originalformulierungen erhalten haben (Nutzerfeedback 11.07.).
+  5. Output der Templates ist REINER TEXT ohne Markdown
+     (landet als Plain Text im Google Doc).
+  6. Testen ohne Mikrofon: TTS-WAV erzeugen (PowerShell
+     System.Speech, Stimme "Microsoft Hedda Desktop") und per
+     curl an POST /upload schicken – so wurden alle Iterationen
+     live verifiziert.
+  7. GEMINI_API_KEY liegt NUR auf Render, nicht lokal.
 
-  Frontend starten:
-    cd "...\voicecore\frontend"
-    npm run dev
-    → http://localhost:5173
+━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
-  NACH FRONTEND-AENDERUNGEN (dist neu bauen + pushen):
-    cd "...\voicecore\frontend"
-    npm run build
-    cd ..
-    git add frontend/dist/
-    git commit -m "build: frontend neu gebaut"
-    git push
-    → Render deployt automatisch (nur pip install, kein Node nötig)
-
-  NACH BACKEND-AENDERUNGEN (nur pushen):
-    git add .
-    git commit -m "..."
-    git push
-    → Render deployt automatisch
-
-  FALLS .venv fehlt:
-    python -m venv .venv
-    .venv\Scripts\pip install -r requirements.txt
+  [ ] Shared-Secret-Header für /upload (Schutz des Gemini-Kontingents)
+  [ ] PWA-Manifest polieren (Icon, Name, Farben)
+  [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
+  [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render
 
 ═══════════════════════════════════════════════════════════════
