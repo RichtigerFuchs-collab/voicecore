@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 // ─── Konstanten ───────────────────────────────────────────────────────────────
 
@@ -28,6 +28,51 @@ function getSupportedMimeType() {
   return '' // absoluter Fallback: Browser entscheidet selbst
 }
 
+// ─── IndexedDB: letzte fehlgeschlagene Aufnahme aufbewahren ──────────────────
+// localStorage kann keine Blobs und ist zu klein für Audio — IndexedDB schon.
+// Ein einziger Slot ('last') reicht: die letzte nicht gesendete Aufnahme.
+
+const DB_NAME = 'voicecore'
+const STORE   = 'pending'
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1)
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror   = () => reject(req.error)
+  })
+}
+
+async function savePending(rec) {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    tx.objectStore(STORE).put(rec, 'last')
+    tx.oncomplete = resolve
+    tx.onerror    = () => reject(tx.error)
+  })
+}
+
+async function loadPending() {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readonly').objectStore(STORE).get('last')
+    req.onsuccess = () => resolve(req.result || null)
+    req.onerror   = () => reject(req.error)
+  })
+}
+
+async function clearPendingDb() {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    tx.objectStore(STORE).delete('last')
+    tx.oncomplete = resolve
+    tx.onerror    = () => reject(tx.error)
+  })
+}
+
 // ─── Status-Anzeige ───────────────────────────────────────────────────────────
 
 const STATUS_MESSAGES = {
@@ -54,6 +99,13 @@ export default function App() {
   const [appSecret, setAppSecret] = useState(() =>
     localStorage.getItem('voicecore_app_secret') || ''
   )
+
+  // Nicht gesendete Aufnahme (überlebt auch App-Neustart via IndexedDB)
+  const [pending, setPending] = useState(null)
+
+  useEffect(() => {
+    loadPending().then(rec => rec && setPending(rec)).catch(() => {})
+  }, [])
 
   const [showSettings, setShowSettings] = useState(false)
   const [destinations, setDestinations] = useState(() => {
@@ -143,40 +195,77 @@ export default function App() {
 
   // ── Upload zum Backend ───────────────────────────────────────────────────
 
-  async function uploadAudio(chunks, mimeType) {
-    const audioBlob = new Blob(chunks, { type: mimeType || 'audio/webm' })
-
+  async function sendRecording(blob, mimeType, templateId, speakerName) {
     const ext      = mimeType?.includes('mp4') ? 'm4a'
                    : mimeType?.includes('ogg') ? 'ogg'
+                   : mimeType?.includes('wav') ? 'wav'
                    : 'webm'
 
     const formData = new FormData()
-    formData.append('audio', audioBlob, `recording.${ext}`)
-    formData.append('template', template)
-    formData.append('destination_url', destinations[template] || '')
-    formData.append('speaker', speaker)
+    formData.append('audio', blob, `recording.${ext}`)
+    formData.append('template', templateId)
+    formData.append('destination_url', destinations[templateId] || '')
+    formData.append('speaker', speakerName)
+
+    const response = await fetch(`${API_URL}/upload`, {
+      method: 'POST',
+      body: formData,
+      // Content-Type NICHT manuell setzen — Browser setzt den multipart-Boundary
+      headers: { 'X-App-Secret': appSecret },
+    })
+
+    if (response.status === 401) {
+      throw new Error('Falsches oder fehlendes App-Passwort. Bitte im ⚙-Menü eintragen.')
+    }
+    if (!response.ok) throw new Error(`Server-Fehler: ${response.status}`)
+
+    return response.json()
+  }
+
+  async function uploadAudio(chunks, mimeType) {
+    const audioBlob = new Blob(chunks, { type: mimeType || 'audio/webm' })
 
     try {
-      const response = await fetch(`${API_URL}/upload`, {
-        method: 'POST',
-        body: formData,
-        // Content-Type NICHT manuell setzen — Browser setzt den multipart-Boundary
-        headers: { 'X-App-Secret': appSecret },
-      })
-
-      if (response.status === 401) {
-        throw new Error('Falsches oder fehlendes App-Passwort. Bitte im ⚙-Menü eintragen.')
-      }
-      if (!response.ok) throw new Error(`Server-Fehler: ${response.status}`)
-
-      const data = await response.json()
+      const data = await sendRecording(audioBlob, mimeType, template, speaker)
       setResult(data)
       setStatus('done')
+    } catch (err) {
+      // Aufnahme aufbewahren, damit sie nicht verloren geht
+      const rec = { blob: audioBlob, mimeType, template, speaker, savedAt: Date.now() }
+      try {
+        await savePending(rec)
+        setPending(rec)
+        setErrorMsg(`${err.message} — die Aufnahme ist gespeichert, du kannst sie unten erneut senden.`)
+      } catch {
+        setErrorMsg(err.message)
+      }
+      setStatus('error')
+    }
+  }
 
+  // ── Gespeicherte Aufnahme erneut senden / verwerfen ─────────────────────
+
+  async function retryPending() {
+    if (!pending || status === 'uploading' || status === 'recording') return
+    setStatus('uploading')
+    setErrorMsg('')
+    setResult(null)
+
+    try {
+      const data = await sendRecording(pending.blob, pending.mimeType, pending.template, pending.speaker)
+      await clearPendingDb().catch(() => {})
+      setPending(null)
+      setResult(data)
+      setStatus('done')
     } catch (err) {
       setErrorMsg(err.message)
       setStatus('error')
     }
+  }
+
+  async function discardPending() {
+    await clearPendingDb().catch(() => {})
+    setPending(null)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -277,6 +366,36 @@ export default function App() {
       {/* Fehlermeldung */}
       {status === 'error' && (
         <p style={styles.error}>{errorMsg}</p>
+      )}
+
+      {/* Nicht gesendete Aufnahme */}
+      {pending && (
+        <div style={styles.pendingCard}>
+          <p style={styles.pendingTitle}>Nicht gesendete Aufnahme</p>
+          <p style={styles.pendingMeta}>
+            {TEMPLATES.find(t => t.id === pending.template)?.label || pending.template}
+            {' · '}{pending.speaker}
+            {' · '}{new Date(pending.savedAt).toLocaleString('de-DE', {
+              day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+            })}{' Uhr'}
+          </p>
+          <div style={styles.pendingButtons}>
+            <button
+              onClick={retryPending}
+              disabled={isDisabled || isRecording}
+              style={styles.pendingRetry}
+            >
+              Erneut senden
+            </button>
+            <button
+              onClick={discardPending}
+              disabled={isDisabled}
+              style={styles.pendingDiscard}
+            >
+              Verwerfen
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Antwort vom Backend */}
@@ -431,6 +550,56 @@ const styles = {
     textAlign: 'center',
     maxWidth:  '320px',
     margin:    0,
+  },
+  pendingCard: {
+    background:    '#fff7e8',
+    border:        '1px solid #e8c88a',
+    borderRadius:  '12px',
+    padding:       '1rem 1.25rem',
+    width:         '100%',
+    maxWidth:      '320px',
+    display:       'flex',
+    flexDirection: 'column',
+    gap:           '0.5rem',
+    boxSizing:     'border-box',
+  },
+  pendingTitle: {
+    fontSize:      '0.8rem',
+    fontWeight:    700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color:         '#b07908',
+    margin:        0,
+  },
+  pendingMeta: {
+    fontSize: '0.9rem',
+    color:    '#6b5834',
+    margin:   0,
+  },
+  pendingButtons: {
+    display:   'flex',
+    gap:       '0.5rem',
+    marginTop: '0.25rem',
+  },
+  pendingRetry: {
+    flex:         1,
+    padding:      '0.55rem 0.75rem',
+    borderRadius: '8px',
+    border:       'none',
+    background:   '#1a1a2e',
+    color:        '#fff',
+    fontSize:     '0.9rem',
+    fontWeight:   600,
+    cursor:       'pointer',
+  },
+  pendingDiscard: {
+    padding:      '0.55rem 0.75rem',
+    borderRadius: '8px',
+    border:       '1px solid #ccc',
+    background:   '#fff',
+    color:        '#888',
+    fontSize:     '0.9rem',
+    cursor:       'pointer',
   },
   result: {
     background:   '#fff',

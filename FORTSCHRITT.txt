@@ -107,6 +107,12 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
       Icons liegen in frontend/public/ → landen beim Build in dist/.
       Auf den Handys: PWA einmal entfernen und neu zum Homescreen
       hinzufügen, damit iOS das neue Icon übernimmt.
+  [x] Aufnahme-Verlust bei Netzproblemen behoben (12.07.2026):
+      Fehlgeschlagene Uploads landen als Blob in IndexedDB (ein
+      Slot 'last', DB 'voicecore', Store 'pending') und überleben
+      App-Neustarts. UI-Karte "Nicht gesendete Aufnahme" mit
+      Erneut senden / Verwerfen; Retry nutzt Original-Template
+      und -Sprecher. Nur Frontend, kein Backend-Change.
   [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
   [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render
 
