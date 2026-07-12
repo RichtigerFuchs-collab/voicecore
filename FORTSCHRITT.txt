@@ -100,7 +100,13 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
       Verhalten danach: App öffnet weiterhin für jeden, aber
       /upload lehnt ohne korrektes Passwort mit 401 ab (klare
       Meldung in der App) – Gemini-Kontingent ist geschützt.
-  [ ] PWA-Manifest polieren (Icon, Name, Farben)
+  [x] PWA-Manifest poliert (12.07.2026): eigenes App-Icon (von Kim,
+      Gemini-generiert: Kim & Kathrin + Schallwelle + Google Doc),
+      manifest.webmanifest, apple-touch-icon (iOS liest keine
+      Manifest-Icons!), maskable-Variante für Android, theme-color.
+      Icons liegen in frontend/public/ → landen beim Build in dist/.
+      Auf den Handys: PWA einmal entfernen und neu zum Homescreen
+      hinzufügen, damit iOS das neue Icon übernimmt.
   [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
   [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render
 

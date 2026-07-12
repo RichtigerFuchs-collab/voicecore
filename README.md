@@ -159,6 +159,6 @@ Hinweis: Der `GEMINI_API_KEY` liegt nur auf Render. Lokal ohne Key antwortet `/u
 ## Mögliche nächste Schritte (offen, nicht dringend)
 
 - [x] Shared-Secret-Header für `/upload` — umgesetzt in v0.7.0 (Env `APP_SECRET` + Header `X-App-Secret`, fail-open ohne Env)
-- [ ] PWA-Manifest prüfen/polieren (Homescreen-Icon, Name, Farben)
+- [x] PWA-Manifest poliert — eigenes App-Icon, `manifest.webmanifest`, Apple-Touch-Icon, maskable-Variante (Icons in `frontend/public/`)
 - [ ] Falls Tagebuch-Texte noch zu glatt wirken: „mindestens ein wörtliches Zitat pro Eintrag“ in den Prompt
 - [ ] Falls Render Free irgendwann nicht mehr reicht: Google Cloud Run als Alternative (passt zum Google-Stack, Cold Start 1–3 s)
