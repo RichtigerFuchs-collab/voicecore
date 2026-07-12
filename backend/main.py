@@ -1,11 +1,12 @@
 import json
 import os
 import re
+import secrets
 import uuid
 from datetime import datetime, date
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, UploadFile, HTTPException
+from fastapi import FastAPI, File, Form, Header, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +19,7 @@ from pydantic import BaseModel
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.6.0")
+app = FastAPI(title="VoiceCore API", version="0.7.0")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -111,6 +112,10 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+
+# Shared Secret für /upload. Nicht gesetzt (lokal / vor Einrichtung auf Render)
+# → Prüfung aus, App verhält sich wie bisher. Gesetzt → Header X-App-Secret Pflicht.
+APP_SECRET = os.environ.get("APP_SECRET", "")
 
 GOOGLE_SERVICE_ACCOUNT_JSON = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 GOOGLE_DOCS_SCOPES = ["https://www.googleapis.com/auth/documents"]
@@ -229,7 +234,12 @@ async def upload_audio(
     template: str = Form(...),
     destination_url: str = Form(default=""),
     speaker: str = Form(default=""),
+    x_app_secret: str = Header(default=""),
 ):
+    # Zugriffsschutz – VOR jeder Verarbeitung und jedem Gemini-Call
+    if APP_SECRET and not secrets.compare_digest(x_app_secret, APP_SECRET):
+        raise HTTPException(status_code=401, detail="Falsches oder fehlendes App-Passwort")
+
     content_type = audio.content_type or ""
     if not content_type.startswith("audio/"):
         raise HTTPException(

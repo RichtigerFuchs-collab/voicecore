@@ -58,6 +58,14 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     Datumsangaben ("am 8. Juli", "gestern") schlagen das heutige
     Datum in der Titelzeile, /health zeigt Version
 
+  It. 7 · 12.07.2026 · Zugriffsschutz (v0.7.0)
+    Shared-Secret für /upload: Env APP_SECRET auf Render, Header
+    X-App-Secret vom Frontend (Passwortfeld im Settings-Panel,
+    localStorage). FAIL-OPEN: ohne gesetztes APP_SECRET keine
+    Prüfung (lokale Dev + sanfter Rollout). Timing-sicherer
+    Vergleich (secrets.compare_digest). /health bleibt offen
+    (Keep-alive!). 401 → klare Meldung in der App.
+
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
   1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,
@@ -79,7 +87,9 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
 
 ━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
-  [ ] Shared-Secret-Header für /upload (Schutz des Gemini-Kontingents)
+  [x] Shared-Secret-Header für /upload → It. 7, v0.7.0
+      Noch zu tun (manuell, Kim): APP_SECRET auf Render setzen,
+      dann Passwort auf beiden Handys einmal im ⚙-Panel eintragen
   [ ] PWA-Manifest polieren (Icon, Name, Farben)
   [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
   [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render

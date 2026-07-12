@@ -51,6 +51,10 @@ export default function App() {
     localStorage.getItem('voicecore_speaker') || SPEAKERS[0]
   )
 
+  const [appSecret, setAppSecret] = useState(() =>
+    localStorage.getItem('voicecore_app_secret') || ''
+  )
+
   const [showSettings, setShowSettings] = useState(false)
   const [destinations, setDestinations] = useState(() => {
     try { return JSON.parse(localStorage.getItem('voicecore_destinations')) || {} }
@@ -72,6 +76,11 @@ export default function App() {
   function selectSpeaker(name) {
     setSpeaker(name)
     localStorage.setItem('voicecore_speaker', name)
+  }
+
+  function updateAppSecret(value) {
+    setAppSecret(value)
+    localStorage.setItem('voicecore_app_secret', value)
   }
 
   // ── Aufnahme starten ─────────────────────────────────────────────────────
@@ -152,8 +161,12 @@ export default function App() {
         method: 'POST',
         body: formData,
         // Content-Type NICHT manuell setzen — Browser setzt den multipart-Boundary
+        headers: { 'X-App-Secret': appSecret },
       })
 
+      if (response.status === 401) {
+        throw new Error('Falsches oder fehlendes App-Passwort. Bitte im ⚙-Menü eintragen.')
+      }
       if (!response.ok) throw new Error(`Server-Fehler: ${response.status}`)
 
       const data = await response.json()
@@ -189,6 +202,17 @@ export default function App() {
       {/* Settings Panel */}
       {showSettings && (
         <div style={styles.settingsPanel}>
+          <p style={styles.settingsTitle}>App-Passwort</p>
+          <div style={styles.settingsRow}>
+            <input
+              type="password"
+              placeholder="einmal eintragen, wird gespeichert"
+              value={appSecret}
+              onChange={e => updateAppSecret(e.target.value)}
+              style={styles.settingsInput}
+              autoComplete="off"
+            />
+          </div>
           <p style={styles.settingsTitle}>Google Docs Ziele</p>
           {TEMPLATES.map(t => (
             <div key={t.id} style={styles.settingsRow}>

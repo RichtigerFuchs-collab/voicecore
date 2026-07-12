@@ -15,5 +15,7 @@ services:
         sync: false
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
+      - key: APP_SECRET
+        sync: false
 
     healthCheckPath: /health

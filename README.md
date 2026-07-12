@@ -105,6 +105,7 @@ Antwort: `{job_id, template, file_size_kb, transcript, formatted, doc_written}`
 | `GEMINI_API_KEY` | Gemini API (ohne: App liefert Hinweis statt Transkript) |
 | `GEMINI_MODEL` | Optionaler Modell-Override (Default: `gemini-3.1-flash-lite`) |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Kompletter JSON-Key des Service Accounts (ohne: Docs-Write wird übersprungen) |
+| `APP_SECRET` | Shared Secret für `/upload`. Gesetzt → Requests brauchen den Header `X-App-Secret` (Passwortfeld im ⚙-Panel der App). Nicht gesetzt → Prüfung aus (lokale Entwicklung / Rollout) |
 
 ### Deploy-Flow
 
@@ -157,7 +158,7 @@ Hinweis: Der `GEMINI_API_KEY` liegt nur auf Render. Lokal ohne Key antwortet `/u
 
 ## Mögliche nächste Schritte (offen, nicht dringend)
 
-- [ ] Shared-Secret-Header für `/upload` (aktuell kann jeder mit der URL das Gemini-Kontingent nutzen)
+- [x] Shared-Secret-Header für `/upload` — umgesetzt in v0.7.0 (Env `APP_SECRET` + Header `X-App-Secret`, fail-open ohne Env)
 - [ ] PWA-Manifest prüfen/polieren (Homescreen-Icon, Name, Farben)
 - [ ] Falls Tagebuch-Texte noch zu glatt wirken: „mindestens ein wörtliches Zitat pro Eintrag“ in den Prompt
 - [ ] Falls Render Free irgendwann nicht mehr reicht: Google Cloud Run als Alternative (passt zum Google-Stack, Cold Start 1–3 s)
