@@ -88,8 +88,18 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
 ━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
   [x] Shared-Secret-Header für /upload → It. 7, v0.7.0
-      Noch zu tun (manuell, Kim): APP_SECRET auf Render setzen,
-      dann Passwort auf beiden Handys einmal im ⚙-Panel eintragen
+      AKTUELLER ZUSTAND (12.07.2026): Code ist live, Schutz aber
+      NOCH NICHT SCHARF – APP_SECRET ist auf Render noch nicht
+      gesetzt, die App funktioniert daher weiterhin ohne Passwort
+      (fail-open, live verifiziert: Upload ohne Header → 200).
+      Zum Scharfschalten (manuell, Kim):
+        1. dashboard.render.com → Service "voicecore" → Environment
+           → APP_SECRET = Passphrase → Save (Auto-Redeploy ~2 Min)
+        2. Auf beiden Handys: PWA neu laden, ⚙ → "App-Passwort"
+           eintragen (wird im Browser gespeichert)
+      Verhalten danach: App öffnet weiterhin für jeden, aber
+      /upload lehnt ohne korrektes Passwort mit 401 ab (klare
+      Meldung in der App) – Gemini-Kontingent ist geschützt.
   [ ] PWA-Manifest polieren (Icon, Name, Farben)
   [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
   [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render
