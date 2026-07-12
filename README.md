@@ -5,8 +5,8 @@
 Eine bewusst leichte One-Click-PWA für Kim & Kathrin. Ein Tap auf den Record-Button, sprechen, fertig — der formatierte Eintrag steht Sekunden später im Tagebuch-, Notiz- oder Restaurant-Doc.
 
 - **Live-App:** https://voicecore.onrender.com
-- **Version:** 0.6.0 (Stand 11.07.2026) — `/health` zeigt die live laufende Version
-- **Status:** Alle 4 Phasen abgeschlossen, produktiv im Einsatz
+- **Version:** 0.7.0 (Stand 12.07.2026) — `/health` zeigt die live laufende Version
+- **Status:** Produktionsreif, produktiv im Einsatz
 
 ---
 
@@ -152,13 +152,17 @@ Hinweis: Der `GEMINI_API_KEY` liegt nur auf Render. Lokal ohne Key antwortet `/u
 | 3 | Mär 2026 | **Templates & Docs-Code** | 3 Template-Prompts (Tagebuch, Quick Note, Restaurant Review), Google-Docs-Integration per Service Account, ⚙-Settings-Panel — Code fertig, aber noch nicht deployed |
 | 4 | Jul 2026 | **Modernisierung & Live-Gang** | SDK-Migration auf `google-genai` (altes SDK deprecated), stabiles Modell statt Preview, ein Gemini-Call statt zwei, Datums-/Locale-Fix, Requirements-Deploy-Bug gefixt, Keep-alive-Workflow, alles live geschaltet und end-to-end getestet |
 | 5 | Jul 2026 | **Personalisierung** | Kim/Kathrin-Umschalter (persistiert pro Gerät), Datum zuerst im Tagebuch-Titel, Restaurant-Review exakt nach Standardlayout des bestehenden Docs, Markdown aus dem Output entfernt |
-| 6 | Jul 2026 | **Feinschliff nach echtem Nutzertest** | Emotionalere Tagebuch-Texte (näher an Originalformulierungen), Namensregel „Kathrin mit th“ für Transkript + Text, gesprochene Datumsangaben schlagen das heutige Datum, `/health` zeigt Version |
+| 6 | Jul 2026 | **Feinschliff nach echtem Nutzertest** | Emotionalere Tagebuch-Texte (näher an Originalformulierungen), Namensregel „Kathrin mit th” für Transkript + Text, gesprochene Datumsangaben schlagen das heutige Datum, `/health` zeigt Version |
+| 7 | Jul 2026 | **Zugriffsschutz (v0.7.0)** | Shared-Secret-Header `X-App-Secret` für `/upload`, Passwortfeld im Settings-Panel, timing-sicherer Vergleich, fail-open ohne konfiguriertes Secret |
+| 8 | Jul 2026 | **PWA-Manifest & Icon** | Eigenes App-Icon (Kim & Kathrin, Schallwelle, Google Doc) in 5 Größen inkl. Android-maskable, `manifest.webmanifest`, iOS-Meta-Tags — installiert sich als „echte App” mit eigenem Icon |
+| 9 | Jul 2026 | **Aufnahmen überleben Netzprobleme** | Fehlgeschlagene Uploads landen in IndexedDB, Karte „Nicht gesendete Aufnahme” mit Erneut senden / Verwerfen, übersteht App-Neustart |
 
 **Gelerntes Muster:** Jede Iteration wurde sofort live getestet (per `curl` mit TTS-generierten Testaufnahmen gegen die deployte App) — Fehler fielen dadurch innerhalb von Minuten auf, nicht erst beim nächsten echten Einsprechen.
 
 ## Mögliche nächste Schritte (offen, nicht dringend)
 
-- [x] Shared-Secret-Header für `/upload` — umgesetzt in v0.7.0 (Env `APP_SECRET` + Header `X-App-Secret`, fail-open ohne Env)
-- [x] PWA-Manifest poliert — eigenes App-Icon, `manifest.webmanifest`, Apple-Touch-Icon, maskable-Variante (Icons in `frontend/public/`)
+- [x] Shared-Secret-Header für `/upload` — v0.7.0
+- [x] PWA-Manifest poliert — eigenes App-Icon, `manifest.webmanifest`, Apple-Touch-Icon, maskable-Variante
+- [x] Aufnahmen überleben Netzprobleme — IndexedDB + „Erneut senden"-Karte
 - [ ] Falls Tagebuch-Texte noch zu glatt wirken: „mindestens ein wörtliches Zitat pro Eintrag“ in den Prompt
 - [ ] Falls Render Free irgendwann nicht mehr reicht: Google Cloud Run als Alternative (passt zum Google-Stack, Cold Start 1–3 s)

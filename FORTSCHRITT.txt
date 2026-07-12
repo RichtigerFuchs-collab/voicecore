@@ -1,6 +1,6 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Stand: 11.07.2026 · Version 0.6.0 · ALLE PHASEN ABGESCHLOSSEN
+  Stand: 12.07.2026 · Version 0.7.0 · PRODUKTIONSREIF
 ═══════════════════════════════════════════════════════════════
 
 ━━━ WAS WIR GEBAUT HABEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -58,13 +58,41 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     Datumsangaben ("am 8. Juli", "gestern") schlagen das heutige
     Datum in der Titelzeile, /health zeigt Version
 
-  It. 7 · 12.07.2026 · Zugriffsschutz (v0.7.0)
+  It. 7 · 12.07.2026 · Zugriffsschutz (v0.7.0, deee61b)
     Shared-Secret für /upload: Env APP_SECRET auf Render, Header
     X-App-Secret vom Frontend (Passwortfeld im Settings-Panel,
     localStorage). FAIL-OPEN: ohne gesetztes APP_SECRET keine
     Prüfung (lokale Dev + sanfter Rollout). Timing-sicherer
     Vergleich (secrets.compare_digest). /health bleibt offen
     (Keep-alive!). 401 → klare Meldung in der App.
+    STATUS 12.07.: APP_SECRET auf Render gesetzt, Schutz SCHARF
+    (live verifiziert: Upload ohne Passwort → 401).
+
+  It. 8 · 12.07.2026 · PWA-Manifest & Icon (8dcc958)
+    Eigenes App-Icon von Kim (Kim & Kathrin + Schallwelle +
+    Google Doc, Gemini-generiert) in 5 Größen:
+    icon-512/-192 (Manifest), apple-touch-icon 180 (iOS liest
+    keine Manifest-Icons!), favicon 64, icon-maskable-512 mit
+    Safe-Zone für Android-Kreis-/Squircle-Masken.
+    manifest.webmanifest: Name "VoiceCore", display standalone,
+    theme_color, background_color.
+    index.html: Manifest-Link, iOS-Meta-Tags. Icons liegen in
+    frontend/public/ → landen beim Build automatisch in dist/.
+
+  It. 9 · 12.07.2026 · Aufnahmen überleben Netzprobleme (79bee62)
+    Fehlgeschlagene Uploads (kein Netz, 401, Server-Fehler)
+    landen als Blob in IndexedDB (DB 'voicecore', Store
+    'pending', Slot 'last') und überleben App-Neustarts.
+    localStorage kann keine Blobs → deshalb IndexedDB.
+    UI-Karte "Nicht gesendete Aufnahme" mit Template, Sprecher
+    und Zeitpunkt; Buttons "Erneut senden" (nutzt Original-
+    Template und -Sprecher, nicht die aktuelle Auswahl) und
+    "Verwerfen". Nur Frontend, kein Backend-Change.
+    End-to-end getestet: Persistenz nach Reload, Fehler-Retry,
+    Erfolgs-Retry, Verwerfen – alle vier Pfade grün.
+    Bonus: Greift perfekt mit It. 7 zusammen – wer das App-
+    Passwort noch nicht eingetragen hat, verliert dank Retry
+    trotzdem keine Aufnahme.
 
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
@@ -84,36 +112,33 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
      curl an POST /upload schicken – so wurden alle Iterationen
      live verifiziert.
   7. GEMINI_API_KEY liegt NUR auf Render, nicht lokal.
+  8. Google-Doc-Link-Format: der komplette Link aus Google Docs
+     wird 1:1 im ⚙-Panel eingefügt – `edit?tab=...#heading=...`
+     ist egal, wird ignoriert. extract_doc_id() parst nur den
+     Teil zwischen /d/ und dem nächsten /. WICHTIG: Das Doc muss
+     mit der Service-Account-E-Mail (aus dem JSON-Key) als
+     EDITOR geteilt sein, nicht als Betrachter – sonst
+     "⚠ konnte nicht beschrieben werden".
 
 ━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
-  [x] Shared-Secret-Header für /upload → It. 7, v0.7.0
-      AKTUELLER ZUSTAND (12.07.2026): Code ist live, Schutz aber
-      NOCH NICHT SCHARF – APP_SECRET ist auf Render noch nicht
-      gesetzt, die App funktioniert daher weiterhin ohne Passwort
-      (fail-open, live verifiziert: Upload ohne Header → 200).
-      Zum Scharfschalten (manuell, Kim):
-        1. dashboard.render.com → Service "voicecore" → Environment
-           → APP_SECRET = Passphrase → Save (Auto-Redeploy ~2 Min)
-        2. Auf beiden Handys: PWA neu laden, ⚙ → "App-Passwort"
-           eintragen (wird im Browser gespeichert)
-      Verhalten danach: App öffnet weiterhin für jeden, aber
-      /upload lehnt ohne korrektes Passwort mit 401 ab (klare
-      Meldung in der App) – Gemini-Kontingent ist geschützt.
-  [x] PWA-Manifest poliert (12.07.2026): eigenes App-Icon (von Kim,
-      Gemini-generiert: Kim & Kathrin + Schallwelle + Google Doc),
-      manifest.webmanifest, apple-touch-icon (iOS liest keine
-      Manifest-Icons!), maskable-Variante für Android, theme-color.
-      Icons liegen in frontend/public/ → landen beim Build in dist/.
-      Auf den Handys: PWA einmal entfernen und neu zum Homescreen
-      hinzufügen, damit iOS das neue Icon übernimmt.
-  [x] Aufnahme-Verlust bei Netzproblemen behoben (12.07.2026):
-      Fehlgeschlagene Uploads landen als Blob in IndexedDB (ein
-      Slot 'last', DB 'voicecore', Store 'pending') und überleben
-      App-Neustarts. UI-Karte "Nicht gesendete Aufnahme" mit
-      Erneut senden / Verwerfen; Retry nutzt Original-Template
-      und -Sprecher. Nur Frontend, kein Backend-Change.
-  [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-Prompt
-  [ ] Bei Bedarf später: Umzug auf Google Cloud Run statt Render
+  [x] Shared-Secret-Header für /upload    → It. 7, v0.7.0 (scharf)
+  [x] PWA-Manifest & eigenes App-Icon     → It. 8
+  [x] Aufnahmen überleben Netzprobleme    → It. 9
+
+  Aufgaben für Kim (einmalig, außerhalb des Codes):
+  [ ] Google-Docs mit Service-Account-E-Mail als EDITOR teilen
+      (E-Mail steht im GOOGLE_SERVICE_ACCOUNT_JSON auf Render,
+       Feld "client_email"). Ohne Editor-Recht: keine Docs-Writes.
+  [ ] Auf beiden Handys PWA vom Homescreen löschen und neu
+      hinzufügen, damit das neue Icon übernommen wird und das
+      App-Passwort im ⚙-Panel eingetragen ist.
+
+  Denkbare spätere Verbesserungen (nichts drängt):
+  [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-
+      Prompt (falls Emotionalität mit der Zeit doch zu glatt wird)
+  [ ] Ggf. Preview-Modell-Wechsel, falls Google gemini-3.1-flash-
+      lite abkündigt – reicht Env-Var GEMINI_MODEL zu setzen
+  [ ] Bei Bedarf: Umzug auf Google Cloud Run statt Render Free
 
 ═══════════════════════════════════════════════════════════════
