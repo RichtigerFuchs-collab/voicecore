@@ -1,17 +1,31 @@
-# Hält den Render Free-Tier-Service wach, damit deine Freundin nie auf einen
-# Cold Start (~50 s) warten muss. GitHub cron feuert frühestens alle 5 Minuten
-# und manchmal mit Verzögerung – 10-Minuten-Takt reicht, Render schläft erst
-# nach 15 Minuten Inaktivität ein.
-name: Keep Render awake
+# Best-Effort-Backup gegen Render-Spin-down (Free Tier schläft nach 15 Min ein).
+#
+# WICHTIG: GitHub drosselt Cron-Zeitpläne massiv – gemessen liefen die Läufe
+# nur alle 1-3,5 STUNDEN statt alle 10 Minuten (Juli 2026, 44 Läufe geprüft).
+# Dieser Workflow ist daher nur ein BACKUP. Der primäre Keep-alive läuft
+# extern (UptimeRobot, 5-Min-Intervall auf /health) – siehe FORTSCHRITT.txt.
+#
+# Der Job schlägt absichtlich NIE fehl (kein Mail-Spam): ein schlafender
+# Server braucht ~40 s zum Aufwachen, der erste Request weckt ihn bereits.
+name: Keep Render awake (backup)
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping /health
-        run: curl --silent --fail --max-time 30 https://voicecore.onrender.com/health
+      - name: Wake /health (mit Geduld für Cold Start)
+        run: |
+          for i in $(seq 1 8); do
+            if curl -s --max-time 20 https://voicecore.onrender.com/health | grep -q '"ok"'; then
+              echo "Server wach (Versuch $i)"
+              exit 0
+            fi
+            echo "Versuch $i: noch nicht wach, warte 15 s"
+            sleep 15
+          done
+          echo "Server nach 8 Versuchen nicht erreichbar – kein Job-Fail, nur Hinweis"

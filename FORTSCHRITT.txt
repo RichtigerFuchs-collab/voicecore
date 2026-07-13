@@ -19,7 +19,8 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
              Modell: gemini-3.1-flash-lite (stabil)
   Docs     : Service Account, Env GOOGLE_SERVICE_ACCOUNT_JSON auf Render
   Hosting  : Render.com Free, EIN Service für Frontend+Backend
-  Cold Start: GitHub Actions pingt alle 10 Min /health (keepalive.yml)
+  Cold Start: 3-stufige Lösung, siehe It. 10 – GitHub-Cron allein
+             reicht NICHT (gemessen: Läufe nur alle 1-3,5 Std!)
 
 ━━━ LIVE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   App      : https://voicecore.onrender.com
@@ -94,6 +95,33 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     Passwort noch nicht eingetragen hat, verliert dank Retry
     trotzdem keine Aufnahme.
 
+  It. 10 · 13.07.2026 · Cold-Start-Problem WIRKLICH gelöst
+    BEFUND: GitHub-Actions-Cron (It. 4) funktioniert NICHT als
+    Keep-alive. Gemessen über 44 Läufe: Ausführung nur alle
+    1-3,5 STUNDEN statt alle 10 Min (GitHub drosselt Free-Crons
+    massiv). Zusätzlich schlugen alle Läufe fehl (--fail +
+    --max-time 30 bricht während des ~40-s-Aufwachens ab).
+    Physik: Render Free schläft nach 15 Min Idle → Ping muss
+    mindestens alle ~14 Min kommen, 24/7. Minimal = 1 leichter
+    GET auf /health alle 10-14 Min, weniger geht nicht.
+    LÖSUNG (3 Stufen):
+    a) PRIMÄR (manuell, Kim): externer Gratis-Ping-Dienst,
+       z.B. UptimeRobot – Monitor-Typ HTTP(s), URL
+       https://voicecore.onrender.com/health, Intervall 5 Min.
+       Zuverlässig, kostenlos, macht nebenbei Downtime-Alarme.
+    b) UX-NETZ (Code, live): Service Worker (frontend/public/
+       sw.js, stale-while-revalidate für App-Shell) – die App
+       öffnet SOFORT aus dem Cache, auch wenn der Server
+       schläft. Beim Öffnen feuert ein Weck-Ping auf /health;
+       während der Aufnahme (20-60 s) wacht der Server auf,
+       der Upload trifft ihn meist schon wach an. Falls nicht:
+       Retry-Karte aus It. 9 fängt es ab.
+    c) BACKUP: keepalive.yml auf */5 umgestellt, wartet dem
+       Cold Start jetzt geduldig ab (8 Versuche à 15 s) und
+       schlägt nie mehr fehl (kein Mail-Spam an Kim).
+    /upload und /health werden NIE gecacht (sw.js schließt
+    sie explizit aus).
+
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
   1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,
@@ -127,6 +155,11 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
   [x] Aufnahmen überleben Netzprobleme    → It. 9
 
   Aufgaben für Kim (einmalig, außerhalb des Codes):
+  [ ] UptimeRobot-Konto anlegen (uptimerobot.com, kostenlos) →
+      "Add Monitor" → Typ HTTP(s) → URL
+      https://voicecore.onrender.com/health → Intervall 5 Min.
+      Das ist der primäre Keep-alive (GitHub-Cron reicht nicht,
+      siehe It. 10).
   [ ] Google-Docs mit Service-Account-E-Mail als EDITOR teilen
       (E-Mail steht im GOOGLE_SERVICE_ACCOUNT_JSON auf Render,
        Feld "client_email"). Ohne Editor-Recht: keine Docs-Writes.

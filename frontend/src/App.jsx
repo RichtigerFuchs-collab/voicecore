@@ -105,6 +105,11 @@ export default function App() {
 
   useEffect(() => {
     loadPending().then(rec => rec && setPending(rec)).catch(() => {})
+
+    // Weck-Ping: Render Free schläft nach 15 Min ein (~40 s Cold Start).
+    // Beim App-Öffnen sofort anklopfen – während der Aufnahme wacht der
+    // Server im Hintergrund auf und der Upload trifft ihn schon wach an.
+    fetch(`${API_URL}/health`).catch(() => {})
   }, [])
 
   const [showSettings, setShowSettings] = useState(false)
