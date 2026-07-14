@@ -1,61 +1,111 @@
 #!/bin/bash
 # VoiceCore → Obsidian: Abholer auf dem Mac einrichten.
 #
-# Einmal ausführen:
 #   chmod +x tools/setup_mac.sh
 #   ./tools/setup_mac.sh
 #
-# Richtet einen launchd-Job ein, der alle 15 Minuten das Postfach-Doc abholt.
-# Läuft im Hintergrund, kein Fenster, startet automatisch beim Anmelden.
+# Das Skript sucht das Obsidian-Vault und den Service-Account-Key selbst,
+# schreibt die Konfiguration, macht einen Testlauf und richtet einen
+# launchd-Job ein (alle 15 Min + beim Anmelden, ohne Fenster).
 
 set -e
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PLIST="$HOME/Library/LaunchAgents/com.voicecore.obsidian-sync.plist"
 VENV="$REPO/.venv-mac"
+CFG="$REPO/tools/obsidian_sync.config.darwin.json"
+PLIST="$HOME/Library/LaunchAgents/com.voicecore.obsidian-sync.plist"
+QUEUE_URL="https://docs.google.com/document/d/14BXLwIDktrUqTqPggkF8io8qj9Z8QkJmUilBaNjCmSA/edit"
 
-echo "VoiceCore → Obsidian: Mac-Einrichtung"
+echo "═══════════════════════════════════════════════"
+echo "  VoiceCore → Obsidian: Mac-Einrichtung"
+echo "═══════════════════════════════════════════════"
 echo "Repo: $REPO"
 echo
 
-# ── 1. Python-Umgebung ───────────────────────────────────────────────────────
-if [ ! -d "$VENV" ]; then
-  echo "Erstelle Python-Umgebung (.venv-mac) ..."
-  python3 -m venv "$VENV"
+# ── 1. Obsidian-Vault suchen ─────────────────────────────────────────────────
+echo "▸ Suche das Obsidian-Vault ..."
+VAULT=""
+MARKER="Tagebuch & Reiseberichte/K&K Tagebuch.md"
+
+for base in "$HOME/Proton Drive" "$HOME/Library/CloudStorage" "$HOME/Documents" "$HOME"; do
+  [ -d "$base" ] || continue
+  found=$(find "$base" -maxdepth 6 -name "K&K Tagebuch.md" -not -path "*/.*" 2>/dev/null | head -1)
+  if [ -n "$found" ]; then
+    VAULT="$(cd "$(dirname "$(dirname "$found")")" && pwd)"
+    break
+  fi
+done
+
+if [ -z "$VAULT" ] || [ ! -f "$VAULT/$MARKER" ]; then
+  echo "  Vault nicht automatisch gefunden."
+  read -r -p "  Pfad zum Obsidian-Ordner eingeben: " VAULT
+  VAULT="${VAULT/#\~/$HOME}"
+  if [ ! -f "$VAULT/$MARKER" ]; then
+    echo "  FEHLER: '$MARKER' liegt nicht in '$VAULT'."
+    exit 1
+  fi
 fi
-echo "Installiere Abhängigkeiten ..."
-"$VENV/bin/pip" install -q --upgrade pip
-"$VENV/bin/pip" install -q google-auth google-api-python-client
-echo "  ✓ Python-Umgebung bereit"
+echo "  ✓ Vault: $VAULT"
 echo
 
-# ── 2. Konfiguration prüfen ──────────────────────────────────────────────────
-CFG="$REPO/tools/obsidian_sync.config.json"
-if [ ! -f "$CFG" ]; then
-  echo "FEHLER: $CFG fehlt."
+# ── 2. Service-Account-Key finden ────────────────────────────────────────────
+echo "▸ Suche den Service-Account-Key ..."
+KEY=""
+for cand in "$HOME/Secrets/voicecore-service-account.json" \
+            "$HOME/Downloads"/*service-account*.json \
+            "$HOME/Downloads"/*astute-maxim*.json; do
+  if [ -f "$cand" ] && grep -q '"type": *"service_account"' "$cand" 2>/dev/null; then
+    KEY="$cand"; break
+  fi
+done
+
+if [ -z "$KEY" ]; then
+  echo "  Key nicht gefunden."
   echo
-  echo "Lege sie an (Mac-Pfade!):"
-  echo '  {'
-  echo '    "service_account_file": "/Users/DEINNAME/Secrets/voicecore-service-account.json",'
-  echo '    "queue_doc_url": "https://docs.google.com/document/d/14BXLwIDktrUqTqPggkF8io8qj9Z8QkJmUilBaNjCmSA/edit",'
-  echo '    "vault_path": "/Users/DEINNAME/.../Obsidian"'
-  echo '  }'
+  echo "  Der Key ist dieselbe JSON-Datei wie auf dem Windows-PC"
+  echo "  (dort: C:\\Users\\Kim\\Secrets\\voicecore-service-account.json)."
+  echo "  Kopiere sie auf den Mac – per USB-Stick oder AirDrop, NICHT per Chat/Cloud."
+  echo "  Empfohlener Ort: ~/Secrets/voicecore-service-account.json"
   echo
-  echo "Der Service-Account-Key ist derselbe wie auf dem PC – einmal kopieren."
+  read -r -p "  Pfad zur JSON-Datei: " KEY
+  KEY="${KEY/#\~/$HOME}"
+fi
+
+if [ ! -f "$KEY" ] || ! grep -q '"type": *"service_account"' "$KEY" 2>/dev/null; then
+  echo "  FEHLER: '$KEY' ist keine gültige Service-Account-Datei."
   exit 1
 fi
-echo "  ✓ Konfiguration gefunden"
-
-# ── 3. Testlauf ──────────────────────────────────────────────────────────────
+chmod 600 "$KEY"
+echo "  ✓ Key: $KEY"
 echo
-echo "Testlauf ..."
+
+# ── 3. Konfiguration schreiben ───────────────────────────────────────────────
+cat > "$CFG" <<EOF
+{
+  "service_account_file": "$KEY",
+  "queue_doc_url": "$QUEUE_URL",
+  "vault_path": "$VAULT"
+}
+EOF
+echo "▸ Konfiguration geschrieben: $(basename "$CFG")"
+echo
+
+# ── 4. Python-Umgebung ───────────────────────────────────────────────────────
+echo "▸ Python-Umgebung ..."
+if [ ! -d "$VENV" ]; then
+  python3 -m venv "$VENV"
+fi
+"$VENV/bin/pip" install -q --upgrade pip
+"$VENV/bin/pip" install -q google-auth google-api-python-client
+echo "  ✓ bereit"
+echo
+
+# ── 5. Testlauf ──────────────────────────────────────────────────────────────
+echo "▸ Testlauf ..."
 "$VENV/bin/python" "$REPO/tools/obsidian_sync.py"
 echo
 
-# ── 4. launchd-Job ───────────────────────────────────────────────────────────
-# Versatz von 7 Minuten gegenüber dem PC (dort: volle Viertelstunde), damit
-# beide Rechner nicht gleichzeitig abholen. Nötig ist das nicht – das Skript
-# beansprucht das Postfach, bevor es schreibt – aber es hält die Logs sauber.
+# ── 6. launchd-Job ───────────────────────────────────────────────────────────
 mkdir -p "$HOME/Library/LaunchAgents"
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -83,10 +133,12 @@ EOF
 
 launchctl unload "$PLIST" 2>/dev/null || true
 launchctl load "$PLIST"
-
-echo "  ✓ launchd-Job eingerichtet: alle 15 Minuten + beim Anmelden"
+echo "▸ Hintergrund-Job eingerichtet: alle 15 Minuten + beim Anmelden"
 echo
-echo "Fertig."
+
+echo "═══════════════════════════════════════════════"
+echo "  Fertig."
+echo "═══════════════════════════════════════════════"
 echo
 echo "Nützlich:"
 echo "  Log ansehen:      tail -f /tmp/voicecore-obsidian-sync.log"
