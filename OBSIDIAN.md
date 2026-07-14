@@ -95,9 +95,60 @@ Ausgabe bei leerem Postfach: `Postfach ist leer – nichts zu tun.`
 
 ---
 
+## Zweiter Rechner (Mac)
+
+Der Abholer darf auf **beiden** Rechnern laufen — je öfter einer von beiden an ist, desto schneller landen die Notizen im Vault. Kein Konflikt, weil der Abholer das Postfach **beansprucht, bevor** er schreibt (siehe Sicherheitsnetz).
+
+### Einrichtung auf dem Mac
+
+**1. Konfiguration anlegen** — das Repo liegt in Proton Drive und ist auf dem Mac ohnehin da, aber die Pfade darin sind Windows-Pfade. Deshalb bekommt jede Plattform eine eigene Datei:
+
+```
+tools/obsidian_sync.config.darwin.json    ← Mac
+tools/obsidian_sync.config.win32.json     ← Windows (existiert bereits)
+```
+
+Inhalt der Mac-Variante:
+```json
+{
+  "service_account_file": "/Users/DEINNAME/Secrets/voicecore-service-account.json",
+  "queue_doc_url": "https://docs.google.com/document/d/14BXLwIDktrUqTqPggkF8io8qj9Z8QkJmUilBaNjCmSA/edit",
+  "vault_path": "/Users/DEINNAME/.../Obsidian"
+}
+```
+
+**2. Service-Account-Key auf den Mac kopieren** — dieselbe JSON-Datei wie auf dem PC, an den Pfad aus der Config. (Nicht über den Chat oder eine Cloud schicken — USB-Stick oder verschlüsselter Transfer.)
+
+**3. Setup-Skript ausführen:**
+```bash
+cd /pfad/zu/voicecore
+chmod +x tools/setup_mac.sh
+./tools/setup_mac.sh
+```
+Das Skript legt eine eigene Python-Umgebung (`.venv-mac`) an, installiert die Abhängigkeiten, macht einen Testlauf und richtet einen **launchd-Job** ein: alle 15 Minuten plus einmal beim Anmelden.
+
+### Nützliche Befehle (Mac)
+```bash
+tail -f /tmp/voicecore-obsidian-sync.log         # Log mitlesen
+launchctl start com.voicecore.obsidian-sync      # sofort ausführen
+launchctl unload ~/Library/LaunchAgents/com.voicecore.obsidian-sync.plist   # abschalten
+```
+
+---
+
 ## Sicherheitsnetz
 
-Der Abholer leert das Postfach **erst, wenn alle Einträge erfolgreich ins Vault geschrieben wurden**. Schlägt etwas fehl (Vault-Pfad weg, Datei gesperrt), bleibt das Postfach unangetastet — kein Eintrag geht verloren, der nächste Lauf holt sie nach. Bereits vorhandene Einträge werden erkannt und nicht doppelt eingefügt.
+Der Abholer arbeitet in dieser Reihenfolge: **sichern → beanspruchen → schreiben.**
+
+1. Die Blöcke werden lokal gesichert (`tools/.pending/<rechnername>/`)
+2. Das Postfach wird geleert — **das ist der Anspruch**: Wer zuerst leert, verarbeitet die Einträge. Der zweite Rechner findet ein leeres Postfach und tut nichts.
+3. Erst dann wird ins Vault geschrieben. Klappt das, verschwindet die Sicherung; klappt es nicht, bleibt sie liegen und der nächste Lauf holt sie nach.
+
+**Warum diese Reihenfolge?** Würden PC und Mac denselben Eintrag verarbeiten, schriebe jeder ihn in *seine* Kopie des Vaults — Syncthing sähe zwei konkurrierende Änderungen und legte `.sync-conflict-…md`-Dateien an. Das Beanspruchen verhindert das.
+
+Zusätzlich prüft der Abholer vor jedem Einfügen, ob der Eintrag schon in der Datei steht. Doppelte Einträge sind damit auch dann ausgeschlossen, wenn etwas schiefgeht.
+
+**Es geht nie etwas verloren:** Selbst wenn der Rechner mitten im Schreiben abstürzt, liegt die Sicherung in `tools/.pending/` und wird beim nächsten Lauf verarbeitet.
 
 ## Wenn etwas nicht klappt
 

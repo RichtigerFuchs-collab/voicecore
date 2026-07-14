@@ -20,6 +20,7 @@ bleibt das Postfach unangetastet – kein Eintrag geht verloren.
 """
 
 import json
+import platform
 import re
 import sys
 from datetime import datetime
@@ -47,13 +48,28 @@ HEADING_RE     = re.compile(r"^## ", re.MULTILINE)
 
 
 def load_config() -> dict:
-    cfg_path = Path(__file__).parent / "obsidian_sync.config.json"
-    if not cfg_path.exists():
-        sys.exit(
-            f"Keine Konfiguration gefunden: {cfg_path}\n"
-            "→ obsidian_sync.config.example.json kopieren und ausfüllen."
-        )
-    return json.loads(cfg_path.read_text(encoding="utf-8"))
+    """Konfiguration laden – pro Plattform, denn das Repo selbst liegt in
+    Proton Drive und wird zwischen Windows-PC und Mac gespiegelt. Die Pfade
+    darin sind aber rechnerspezifisch.
+
+      obsidian_sync.config.darwin.json  → nur Mac
+      obsidian_sync.config.win32.json   → nur Windows
+      obsidian_sync.config.json         → Rückfallebene für beide
+    """
+    here       = Path(__file__).parent
+    candidates = [
+        here / f"obsidian_sync.config.{sys.platform}.json",
+        here / "obsidian_sync.config.json",
+    ]
+    for cfg_path in candidates:
+        if cfg_path.exists():
+            return json.loads(cfg_path.read_text(encoding="utf-8"))
+
+    sys.exit(
+        "Keine Konfiguration gefunden. Erwartet eine von:\n"
+        + "\n".join(f"  {c}" for c in candidates)
+        + "\n→ obsidian_sync.config.example.json kopieren und ausfüllen."
+    )
 
 
 def extract_doc_id(url_or_id: str) -> str:
@@ -160,6 +176,56 @@ def clear_queue(service, doc_id: str, end_index: int) -> None:
     ).execute()
 
 
+# ─── Ausstehende Blöcke (Absturzsicherung) ───────────────────────────────────
+# Das Skript darf auf MEHREREN Rechnern laufen (Windows-PC und Mac). Beide
+# holen aus demselben Postfach, schreiben aber in ihre eigene, per Syncthing
+# gespiegelte Vault-Kopie. Würden beide denselben Eintrag verarbeiten, sähe
+# Syncthing zwei konkurrierende Änderungen → .sync-conflict-Dateien.
+#
+# Deshalb: ERST das Postfach leeren (= beanspruchen), DANN ins Vault schreiben.
+# Wer zuerst leert, gewinnt; der andere findet ein leeres Postfach vor.
+# Damit beim Leeren nichts verloren geht, werden die Blöcke vorher lokal
+# gesichert und erst nach erfolgreichem Schreiben wieder entfernt.
+
+# Pro Rechner ein eigenes Verzeichnis: Das Repo wird über Proton Drive
+# gespiegelt: ein gemeinsames .pending würde bedeuten, dass sich PC und Mac
+# gegenseitig die Reste wegschnappen.
+PENDING_DIR = Path(__file__).parent / ".pending" / platform.node()
+
+
+def save_pending(blocks: list[dict]) -> Path:
+    PENDING_DIR.mkdir(parents=True, exist_ok=True)
+    path = PENDING_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.json"
+    path.write_text(json.dumps(blocks, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def load_pending() -> list[tuple[Path, list[dict]]]:
+    """Blöcke aus früheren, fehlgeschlagenen Läufen."""
+    if not PENDING_DIR.exists():
+        return []
+    out = []
+    for path in sorted(PENDING_DIR.glob("*.json")):
+        try:
+            out.append((path, json.loads(path.read_text(encoding="utf-8"))))
+        except Exception as e:
+            print(f"  ! Ausstehende Datei unlesbar: {path.name} ({e})")
+    return out
+
+
+def write_blocks(vault: Path, blocks: list[dict], source: Path) -> bool:
+    ok = all(insert_into_vault(vault, b) for b in blocks)
+    if ok:
+        source.unlink(missing_ok=True)
+    else:
+        print(
+            f"\n  ! Nicht alle Einträge konnten geschrieben werden.\n"
+            f"    Sie bleiben gesichert in: {source}\n"
+            f"    Der nächste Lauf versucht es erneut."
+        )
+    return ok
+
+
 def main() -> None:
     cfg   = load_config()
     vault = Path(cfg["vault_path"])
@@ -172,25 +238,32 @@ def main() -> None:
     service = build("docs", "v1", credentials=credentials)
     doc_id  = extract_doc_id(cfg["queue_doc_url"])
 
+    all_ok = True
+
+    # 1. Reste aus früheren Läufen zuerst abarbeiten
+    for path, blocks in load_pending():
+        print(f"{len(blocks)} Eintrag/Einträge aus früherem Lauf ({path.name}):")
+        all_ok &= write_blocks(vault, blocks, path)
+
+    # 2. Postfach abholen
     text, end_index = read_doc_text(service, doc_id)
     blocks = parse_blocks(text)
 
     if not blocks:
-        print("Postfach ist leer – nichts zu tun.")
-        return
+        if all_ok:
+            print("Postfach ist leer – nichts zu tun.")
+        sys.exit(0 if all_ok else 1)
 
     print(f"{len(blocks)} Eintrag/Einträge im Postfach:")
-    all_ok = all(insert_into_vault(vault, b) for b in blocks)
+
+    # Sichern, beanspruchen (leeren), dann schreiben – in genau dieser Reihenfolge
+    pending = save_pending(blocks)
+    clear_queue(service, doc_id, end_index)
+    all_ok &= write_blocks(vault, blocks, pending)
 
     if all_ok:
-        clear_queue(service, doc_id, end_index)
         print("Postfach geleert. Fertig.")
-    else:
-        print(
-            "\nMindestens ein Eintrag konnte nicht geschrieben werden – "
-            "das Postfach bleibt unverändert, damit nichts verloren geht."
-        )
-        sys.exit(1)
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

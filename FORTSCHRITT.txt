@@ -151,6 +151,34 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     wenn ALLE Blöcke geschrieben wurden; Duplikate werden erkannt.
     → Volle Einrichtungsanleitung: OBSIDIAN.md
 
+  It. 12 · 15.07.2026 · Abholer läuft auf PC UND Mac
+    Ziel: weniger PC-Abhängigkeit. Statt VPS/GitHub (beides
+    verworfen – Kosten bzw. Tagebuch auf fremden Servern) läuft
+    der Abholer jetzt auf beiden Rechnern. Ist einer an, syncts.
+
+    PROBLEM DABEI: Beide holen aus demselben Postfach, schreiben
+    aber in ihre EIGENE, per Syncthing gespiegelte Vault-Kopie.
+    Zwei konkurrierende Änderungen an derselben Datei → Syncthing
+    legt .sync-conflict-Dateien an. Die Idempotenz-Prüfung hilft
+    nicht (keiner sieht die Änderung des anderen rechtzeitig).
+
+    LÖSUNG: "sichern → beanspruchen → schreiben"
+      1. Blöcke lokal sichern (tools/.pending/<rechnername>/)
+      2. Postfach SOFORT leeren = Anspruch. Wer zuerst leert,
+         gewinnt; der andere findet ein leeres Postfach.
+      3. Erst dann ins Vault schreiben. Erfolg → Sicherung weg,
+         Fehler → Sicherung bleibt, nächster Lauf holt sie nach.
+    Dadurch kann NIE etwas verloren gehen, auch nicht bei Absturz
+    zwischen Leeren und Schreiben.
+
+    Config ist jetzt plattformspezifisch, weil das Repo selbst in
+    Proton Drive liegt und auf beiden Rechnern auftaucht – die
+    Pfade darin sind aber rechnerspezifisch:
+      obsidian_sync.config.win32.json   (PC)
+      obsidian_sync.config.darwin.json  (Mac)
+      obsidian_sync.config.json         (Rückfallebene)
+    Mac-Einrichtung: tools/setup_mac.sh (launchd, alle 15 Min).
+
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
   1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,

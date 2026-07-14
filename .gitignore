@@ -12,8 +12,12 @@ node_modules/
 .env.local
 
 # Obsidian-Abholer: enthält Pfad zum Service-Account-Key – NIE einchecken!
-tools/obsidian_sync.config.json
+# (auch die plattformspezifischen Varianten .win32.json / .darwin.json)
+tools/obsidian_sync.config*.json
+!tools/obsidian_sync.config.example.json
 *service-account*.json
+# Zwischengespeicherte Einträge aus fehlgeschlagenen Läufen (Notizinhalte!)
+tools/.pending/
 
 # macOS
 .DS_Store
