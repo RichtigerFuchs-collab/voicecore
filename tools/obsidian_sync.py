@@ -43,6 +43,7 @@ TARGETS = {
 }
 
 FRONTMATTER_RE = re.compile(r"\A---\r?\n.*?\r?\n---\r?\n", re.DOTALL)
+HEADING_RE     = re.compile(r"^## ", re.MULTILINE)
 
 
 def load_config() -> dict:
@@ -120,10 +121,18 @@ def insert_into_vault(vault: Path, block: dict) -> bool:
             content[:marker] + entry + content[marker:] if marker != -1
             else content.rstrip() + "\n\n" + entry
         )
-    else:  # "top" – direkt nach dem Frontmatter
-        fm = FRONTMATTER_RE.match(content)
+    else:  # "top" – neuester Eintrag zuerst, aber unter einem evtl. Intro-Text
+        fm  = FRONTMATTER_RE.match(content)
         cut = fm.end() if fm else 0
-        new_content = content[:cut] + "\n" + entry + content[cut:].lstrip("\n")
+        # Vor der ersten "## "-Überschrift einfügen. Gibt es noch keine
+        # (frische Datei mit nur Frontmatter + Intro), kommt der Eintrag ans Ende.
+        heading = HEADING_RE.search(content, cut)
+        pos = heading.start() if heading else len(content)
+        new_content = (
+            content[:pos].rstrip("\n") + "\n\n" + entry + content[pos:]
+            if heading
+            else content.rstrip("\n") + "\n\n" + entry
+        )
 
     # Frontmatter-Feld "aktualisiert" mitziehen, falls vorhanden
     new_content = re.sub(
