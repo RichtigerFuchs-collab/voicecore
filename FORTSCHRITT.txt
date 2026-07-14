@@ -1,16 +1,18 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Stand: 14.07.2026 · Version 0.8.0 · PRODUKTIONSREIF
+  Stand: 15.07.2026 · Version 0.8.0 · PRODUKTIONSREIF
 ═══════════════════════════════════════════════════════════════
 
 ━━━ WAS WIR GEBAUT HABEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 One-Click-Sprachnotiz-App für Kim & Kathrin:
-Sprache → Gemini (Transkript + Formatierung in EINEM Call) → Google Docs
+Sprache → Gemini (EIN Call: Transkript + Doc-Text + Markdown)
+        → Google Docs (sofort)  UND  Obsidian-Vault (via Abholer)
 Drei Templates: Tagebuch, Quick Note, Restaurant Review.
-PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
+PRODUKTIV IM EINSATZ – live end-to-end getestet.
 
-→ Vollständige Doku (Features, Technik, API, Design-Entscheidungen):
-  README.md ← DORT ZUERST LESEN
+→ Vollständige Doku:
+  README.md    ← Features, Technik, API, Design-Entscheidungen
+  OBSIDIAN.md  ← Obsidian-Anbindung + Einrichtung (PC & Mac)
 
 ━━━ TECHNISCHER STACK (Kurzfassung) ━━━━━━━━━━━━━━━━━━━━━━━━━
   Frontend : React + Vite, dist/ EINGECHECKT (nach Änderungen: npm run build!)
@@ -18,6 +20,8 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
   KI       : google-genai SDK (NICHT das alte google-generativeai – deprecated!)
              Modell: gemini-3.1-flash-lite (stabil)
   Docs     : Service Account, Env GOOGLE_SERVICE_ACCOUNT_JSON auf Render
+  Obsidian : Postfach-Doc + lokaler Abholer (tools/obsidian_sync.py),
+             laeuft auf PC (Aufgabenplanung) und Mac (launchd), je 15 Min
   Hosting  : Render.com Free, EIN Service für Frontend+Backend
   Cold Start: 3-stufige Lösung, siehe It. 10 – GitHub-Cron allein
              reicht NICHT (gemessen: Läufe nur alle 1-3,5 Std!)
@@ -27,6 +31,7 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
   GitHub   : https://github.com/RichtigerFuchs-collab/voicecore
   Deploy   : git push auf master → Render deployed automatisch (2-3 Min)
   Prüfung  : curl https://voicecore.onrender.com/health → "version" checken
+  Postfach : Google Doc 14BXLwIDktrUqTqPggkF8io8qj9Z8QkJmUilBaNjCmSA
 
 ━━━ ITERATIONSHISTORIE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -147,8 +152,7 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     die drei Vault-Dateien und leert das Postfach.
     Postfach-Format: <<<VOICECORE|template|speaker|stamp>>> ...
     <<<ENDE>>>
-    Abholer ist idempotent + fail-safe: leert das Postfach nur,
-    wenn ALLE Blöcke geschrieben wurden; Duplikate werden erkannt.
+    (Reihenfolge des Abholers wurde in It. 12 geändert – siehe dort.)
     → Volle Einrichtungsanleitung: OBSIDIAN.md
 
   It. 12 · 15.07.2026 · Abholer läuft auf PC UND Mac
@@ -204,38 +208,66 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
      mit der Service-Account-E-Mail (aus dem JSON-Key) als
      EDITOR geteilt sein, nicht als Betrachter – sonst
      "⚠ konnte nicht beschrieben werden".
+  9. SERVICE ACCOUNTS KÖNNEN KEINE DRIVE-DATEIEN ANLEGEN
+     (kein Speicherkontingent → storageQuotaExceeded). Sie dürfen
+     nur in bestehende, mit ihnen geteilte Docs SCHREIBEN.
+     Deshalb das Postfach-Doc statt .md-Dateien in Drive.
+     Nie wieder "Backend legt Datei in Google Drive" vorschlagen.
+ 10. GITHUB-ACTIONS-CRON TAUGT NICHT ALS KEEP-ALIVE
+     (gemessen: Läufe nur alle 1-3,5 Std trotz */10). Siehe It. 10.
+ 11. Obsidian-Abholer NIE auf "erst schreiben, dann Postfach
+     leeren" zurückbauen! Er läuft auf zwei Rechnern (PC + Mac),
+     die dasselbe Vault per Syncthing spiegeln. Nur die Reihen-
+     folge "sichern → beanspruchen (leeren) → schreiben" verhindert
+     Sync-Konflikte. Siehe It. 12.
+ 12. Config-Dateien des Abholers sind plattformspezifisch
+     (.win32.json / .darwin.json), weil das Repo in Proton Drive
+     liegt und auf beiden Rechnern auftaucht.
+ 13. Kims Obsidian-Vault liegt unter
+     "Proton Drive/My files/Claude/Obsidian" und enthält SEHR
+     private Inhalte. Vor Schreibzugriffen IMMER Backup ziehen und
+     danach prüfen, dass Bestandsinhalte vollständig erhalten sind.
 
 ━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
   [x] Shared-Secret-Header für /upload    → It. 7, v0.7.0 (scharf)
   [x] PWA-Manifest & eigenes App-Icon     → It. 8
   [x] Aufnahmen überleben Netzprobleme    → It. 9
+  [x] Cold-Start-Problem gelöst           → It. 10
+  [x] Obsidian-Export (3 Vault-Dateien)   → It. 11, LIVE GETESTET
+  [x] Abholer PC-Aufgabenplanung          → läuft alle 15 Min
 
   Aufgaben für Kim (einmalig, außerhalb des Codes):
-  [ ] OBSIDIAN-EXPORT SCHARF SCHALTEN (siehe OBSIDIAN.md):
-      1. Leeres Google Doc "VoiceCore Postfach" anlegen, mit der
-         Service-Account-E-Mail als EDITOR teilen
-      2. In der App: ⚙ → Feld "Obsidian-Postfach" → Link eintragen
-      3. Service-Account-JSON lokal ablegen (NICHT im Repo!)
-      4. tools/obsidian_sync.config.json aus der .example anlegen
-      5. Windows-Aufgabenplanung: obsidian_sync.py alle 15 Min
+  [ ] MAC EINRICHTEN (macht den Sync PC-unabhängiger):
+      1. tools/obsidian_sync.config.darwin.json anlegen
+         (Mac-Pfade! Vorlage: obsidian_sync.config.example.json)
+      2. Service-Account-JSON auf den Mac kopieren (USB/verschlüsselt,
+         NICHT über Chat oder Cloud)
+      3. chmod +x tools/setup_mac.sh && ./tools/setup_mac.sh
+         → richtet launchd-Job ein (alle 15 Min + beim Anmelden)
+      Details: OBSIDIAN.md, Abschnitt "Zweiter Rechner (Mac)"
   [ ] UptimeRobot-Konto anlegen (uptimerobot.com, kostenlos) →
       "Add Monitor" → Typ HTTP(s) → URL
       https://voicecore.onrender.com/health → Intervall 5 Min.
       Das ist der primäre Keep-alive (GitHub-Cron reicht nicht,
       siehe It. 10).
-  [ ] Google-Docs mit Service-Account-E-Mail als EDITOR teilen
-      (E-Mail steht im GOOGLE_SERVICE_ACCOUNT_JSON auf Render,
-       Feld "client_email"). Ohne Editor-Recht: keine Docs-Writes.
+  [ ] Die drei Ziel-Docs mit Service-Account-E-Mail als EDITOR
+      teilen, falls noch nicht geschehen (Postfach-Doc ist schon
+      korrekt geteilt – live verifiziert 15.07.).
   [ ] Auf beiden Handys PWA vom Homescreen löschen und neu
-      hinzufügen, damit das neue Icon übernommen wird und das
-      App-Passwort im ⚙-Panel eingetragen ist.
+      hinzufügen, damit das neue Icon übernommen wird; App-Passwort
+      und Obsidian-Postfach-Link im ⚙-Panel eintragen.
 
   Denkbare spätere Verbesserungen (nichts drängt):
+  [ ] Vollständige PC-Unabhängigkeit bräuchte VPS (~4€/Mon, volle
+      Kontrolle) oder privates GitHub-Repo (kostenlos, aber Tagebuch
+      läge auf fremden Servern). Beides am 15.07. bewusst VERWORFEN
+      zugunsten "Abholer auf PC + Mac". Self-hosted LiveSync scheidet
+      aus: verschlüsselt E2E, ein Server könnte gar nicht schreiben.
   [ ] Ggf. "mind. ein wörtliches Zitat pro Eintrag" in Tagebuch-
       Prompt (falls Emotionalität mit der Zeit doch zu glatt wird)
-  [ ] Ggf. Preview-Modell-Wechsel, falls Google gemini-3.1-flash-
-      lite abkündigt – reicht Env-Var GEMINI_MODEL zu setzen
+  [ ] Ggf. Modell-Wechsel, falls Google gemini-3.1-flash-lite
+      abkündigt – reicht, Env-Var GEMINI_MODEL auf Render zu setzen
   [ ] Bei Bedarf: Umzug auf Google Cloud Run statt Render Free
 
 ═══════════════════════════════════════════════════════════════

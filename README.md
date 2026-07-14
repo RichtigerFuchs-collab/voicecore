@@ -1,12 +1,13 @@
 # VoiceCore
 
-**Sprachnotiz einsprechen → Gemini transkribiert & formatiert → Eintrag landet im richtigen Google Doc.**
+**Sprachnotiz einsprechen → Gemini transkribiert & formatiert → Eintrag landet im richtigen Google Doc *und* im Obsidian-Vault.**
 
 Eine bewusst leichte One-Click-PWA für Kim & Kathrin. Ein Tap auf den Record-Button, sprechen, fertig — der formatierte Eintrag steht Sekunden später im Tagebuch-, Notiz- oder Restaurant-Doc.
 
 - **Live-App:** https://voicecore.onrender.com
-- **Version:** 0.7.0 (Stand 12.07.2026) — `/health` zeigt die live laufende Version
+- **Version:** 0.8.0 (Stand 15.07.2026) — `/health` zeigt die live laufende Version
 - **Status:** Produktionsreif, produktiv im Einsatz
+- **Obsidian-Anbindung:** siehe [OBSIDIAN.md](OBSIDIAN.md)
 
 ---
 
@@ -32,8 +33,14 @@ Wird im Audio ein Datum genannt („das war am 8. Juli“, „gestern“, „let
 ### Google-Docs-Anbindung
 Im ⚙-Settings-Panel wird pro Template eine Google-Docs-URL hinterlegt (gespeichert im Browser). Neue Einträge werden **oben** ins Doc geschrieben (prepend) mit Trennlinie und Kopfzeile (Template · Datum · Uhrzeit). Der Output ist bewusst **reiner Text ohne Markdown** — `##` und `**` würden im Doc als sichtbare Zeichen landen. Feedback in der App: `✓ Gespeichert in Google Doc` (grün) oder `⚠ konnte nicht beschrieben werden` (amber).
 
+### Obsidian-Anbindung (seit v0.8.0)
+Parallel zum Google Doc wandert jede Notiz als Markdown in eine von drei Sammel-Dateien des Vaults: Tagebuch → `K&K Tagebuch.md`, Quick Note → `00_Inbox/inbox.md`, Review → `Restaurant-Reviews.md`. Gemini liefert dafür ein drittes Feld (`markdown`) im selben Aufruf. Die Brücke ist ein **Postfach-Doc**, das ein lokaler Abholer (`tools/obsidian_sync.py`) alle 15 Minuten leert — auf PC **und** Mac. Vollständige Erklärung und Einrichtung: **[OBSIDIAN.md](OBSIDIAN.md)**.
+
 ### Kein Warten auf Cold Starts
-GitHub Actions (`.github/workflows/keepalive.yml`) pingt alle 10 Minuten `/health`, damit der Render-Free-Service nie einschläft (sonst ~50 s Wartezeit nach 15 Min Inaktivität).
+Dreistufig, weil GitHub-Cron allein nachweislich versagt (gemessen: Läufe nur alle 1–3,5 Stunden statt alle 10 Minuten):
+1. **Service Worker** — die App öffnet sofort aus dem Cache, auch wenn der Server noch schläft
+2. **Weck-Ping** auf `/health` beim App-Start — der Server wacht auf, während man einspricht
+3. **Externer Ping-Dienst** (UptimeRobot, alle 5 Min) als primärer Keep-alive; `.github/workflows/keepalive.yml` läuft nur noch als Backup
 
 ---
 
@@ -156,6 +163,9 @@ Hinweis: Der `GEMINI_API_KEY` liegt nur auf Render. Lokal ohne Key antwortet `/u
 | 7 | Jul 2026 | **Zugriffsschutz (v0.7.0)** | Shared-Secret-Header `X-App-Secret` für `/upload`, Passwortfeld im Settings-Panel, timing-sicherer Vergleich, fail-open ohne konfiguriertes Secret |
 | 8 | Jul 2026 | **PWA-Manifest & Icon** | Eigenes App-Icon (Kim & Kathrin, Schallwelle, Google Doc) in 5 Größen inkl. Android-maskable, `manifest.webmanifest`, iOS-Meta-Tags — installiert sich als „echte App” mit eigenem Icon |
 | 9 | Jul 2026 | **Aufnahmen überleben Netzprobleme** | Fehlgeschlagene Uploads landen in IndexedDB, Karte „Nicht gesendete Aufnahme” mit Erneut senden / Verwerfen, übersteht App-Neustart |
+| 10 | Jul 2026 | **Cold Start wirklich gelöst** | Befund: GitHub-Cron lief nur alle 1–3,5 h statt alle 10 Min. Neu: Service Worker (App öffnet sofort aus dem Cache), Weck-Ping beim Start, GitHub-Cron nur noch als Backup, primär ein externer Ping-Dienst |
+| 11 | Jul 2026 | **Obsidian-Export (v0.8.0)** | Jede Notiz geht parallel ins Google Doc **und** ins Obsidian-Vault. Gemini liefert drei Felder in einem Call. Postfach-Doc als Brücke (Service Accounts können keine Drive-Dateien anlegen), lokaler Abholer verteilt auf drei Sammel-Dateien |
+| 12 | Jul 2026 | **Abholer auf PC und Mac** | Weniger PC-Abhängigkeit ohne VPS/GitHub. „Sichern → beanspruchen → schreiben” verhindert Syncthing-Konflikte, wenn beide Rechner laufen; plattformspezifische Konfiguration |
 
 **Gelerntes Muster:** Jede Iteration wurde sofort live getestet (per `curl` mit TTS-generierten Testaufnahmen gegen die deployte App) — Fehler fielen dadurch innerhalb von Minuten auf, nicht erst beim nächsten echten Einsprechen.
 
