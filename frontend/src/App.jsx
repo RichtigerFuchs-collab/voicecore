@@ -100,6 +100,11 @@ export default function App() {
     localStorage.getItem('voicecore_app_secret') || ''
   )
 
+  // Postfach-Doc für Obsidian (leer = kein Obsidian-Export)
+  const [obsidianQueue, setObsidianQueue] = useState(() =>
+    localStorage.getItem('voicecore_obsidian_queue') || ''
+  )
+
   // Nicht gesendete Aufnahme (überlebt auch App-Neustart via IndexedDB)
   const [pending, setPending] = useState(null)
 
@@ -138,6 +143,11 @@ export default function App() {
   function updateAppSecret(value) {
     setAppSecret(value)
     localStorage.setItem('voicecore_app_secret', value)
+  }
+
+  function updateObsidianQueue(value) {
+    setObsidianQueue(value)
+    localStorage.setItem('voicecore_obsidian_queue', value)
   }
 
   // ── Aufnahme starten ─────────────────────────────────────────────────────
@@ -211,6 +221,7 @@ export default function App() {
     formData.append('template', templateId)
     formData.append('destination_url', destinations[templateId] || '')
     formData.append('speaker', speakerName)
+    formData.append('obsidian_queue_url', obsidianQueue)
 
     const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
@@ -320,6 +331,18 @@ export default function App() {
               />
             </div>
           ))}
+
+          <p style={styles.settingsTitle}>Obsidian-Postfach</p>
+          <div style={styles.settingsRow}>
+            <label style={styles.settingsLabel}>Postfach → Google Doc</label>
+            <input
+              type="url"
+              placeholder="leer = kein Obsidian-Export"
+              value={obsidianQueue}
+              onChange={e => updateObsidianQueue(e.target.value)}
+              style={styles.settingsInput}
+            />
+          </div>
         </div>
       )}
 
@@ -427,6 +450,12 @@ export default function App() {
           )}
           {result.doc_written === false && destinations[result.template] && (
             <p style={styles.docWarning}>⚠ Google Doc konnte nicht beschrieben werden</p>
+          )}
+          {result.queued_for_obsidian === true && (
+            <p style={styles.docSuccess}>✓ Für Obsidian vorgemerkt</p>
+          )}
+          {result.queued_for_obsidian === false && obsidianQueue && result.markdown && (
+            <p style={styles.docWarning}>⚠ Obsidian-Postfach nicht erreichbar</p>
           )}
         </div>
       )}

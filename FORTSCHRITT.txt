@@ -1,6 +1,6 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Stand: 12.07.2026 · Version 0.7.0 · PRODUKTIONSREIF
+  Stand: 14.07.2026 · Version 0.8.0 · PRODUKTIONSREIF
 ═══════════════════════════════════════════════════════════════
 
 ━━━ WAS WIR GEBAUT HABEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -122,6 +122,35 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
     /upload und /health werden NIE gecacht (sw.js schließt
     sie explizit aus).
 
+  It. 11 · 14.07.2026 · Obsidian-Export (v0.8.0)
+    Jede Notiz geht jetzt PARALLEL in Google Doc UND ins Obsidian-
+    Vault (User-Entscheidung: beides, nicht entweder/oder).
+    Ziel sind DREI BESTEHENDE Sammel-Dateien (nicht eine Datei
+    pro Eintrag, wie das Konzeptpapier vorschlug):
+      tagebuch          → Tagebuch & Reiseberichte/K&K Tagebuch.md (oben)
+      quick_note        → 00_Inbox/inbox.md (oben; war leer, Struktur gegeben)
+      restaurant_review → Reviews/Restaurant-Reviews.md (vor "🔗 Verknüpft")
+    Gemini liefert jetzt DREI Felder in EINEM Call: transcript,
+    formatted (Plain Text fürs Doc), markdown (für Obsidian).
+    KEIN YAML-Frontmatter pro Eintrag! Die Zieldateien haben schon
+    eins am Dateianfang – ein zweites "---" mittendrin würde
+    Obsidian als Trennlinie rendern. Stattdessen ##-Überschrift
+    plus Hashtags am Ende.
+
+    WICHTIGSTER BEFUND: Service Accounts haben KEIN Drive-
+    Speicherkontingent und können in Consumer-Google-Drive KEINE
+    Dateien anlegen (storageQuotaExceeded). Der naheliegende Weg
+    ".md-Datei in Google Drive schreiben" ist damit tot.
+    LÖSUNG: Ein Google DOC als Postfach (gehört Kim, SA fügt nur
+    Text ein – genau wie bei den Ziel-Docs). Lokales Skript
+    tools/obsidian_sync.py holt die Blöcke ab, verteilt sie auf
+    die drei Vault-Dateien und leert das Postfach.
+    Postfach-Format: <<<VOICECORE|template|speaker|stamp>>> ...
+    <<<ENDE>>>
+    Abholer ist idempotent + fail-safe: leert das Postfach nur,
+    wenn ALLE Blöcke geschrieben wurden; Duplikate werden erkannt.
+    → Volle Einrichtungsanleitung: OBSIDIAN.md
+
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
   1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,
@@ -155,6 +184,13 @@ PRODUKTIV IM EINSATZ – von Kim erfolgreich getestet.
   [x] Aufnahmen überleben Netzprobleme    → It. 9
 
   Aufgaben für Kim (einmalig, außerhalb des Codes):
+  [ ] OBSIDIAN-EXPORT SCHARF SCHALTEN (siehe OBSIDIAN.md):
+      1. Leeres Google Doc "VoiceCore Postfach" anlegen, mit der
+         Service-Account-E-Mail als EDITOR teilen
+      2. In der App: ⚙ → Feld "Obsidian-Postfach" → Link eintragen
+      3. Service-Account-JSON lokal ablegen (NICHT im Repo!)
+      4. tools/obsidian_sync.config.json aus der .example anlegen
+      5. Windows-Aufgabenplanung: obsidian_sync.py alle 15 Min
   [ ] UptimeRobot-Konto anlegen (uptimerobot.com, kostenlos) →
       "Add Monitor" → Typ HTTP(s) → URL
       https://voicecore.onrender.com/health → Intervall 5 Min.

@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.7.0")
+app = FastAPI(title="VoiceCore API", version="0.8.0")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -141,6 +141,53 @@ class VoiceResult(BaseModel):
     """Strukturierte Antwort des kombinierten Gemini-Calls."""
     transcript: str
     formatted: str
+    markdown: str
+
+
+# ─── Obsidian: Markdown-Vorgaben pro Template ─────────────────────────────────
+# Die Einträge werden an BESTEHENDE Sammel-Dateien angehängt, die bereits ein
+# YAML-Frontmatter am Dateianfang haben. Deshalb KEIN Frontmatter pro Eintrag –
+# ein zweites "---" mitten in der Datei würde Obsidian als Trennlinie rendern.
+# Jeder Eintrag beginnt mit einer "## "-Überschrift, exakt wie im Vault üblich.
+
+MARKDOWN_RULES = {
+    "tagebuch": (
+        "Erzeuge den Eintrag für die Obsidian-Datei 'K&K Tagebuch.md'.\n"
+        "Format (exakt so, kein YAML-Frontmatter!):\n"
+        "## [Datum] – [Titel] ({speaker})\n\n"
+        "### Was war los?\n\n[Text]\n\n"
+        "### Wie war es?\n\n[Text]\n\n"
+        "### Gedanken danach\n\n[Text]\n\n"
+        "Inhaltlich identisch zum Feld 'formatted' – nur mit Markdown-Überschriften. "
+        "Datum wie in 'formatted' (also ggf. das im Audio genannte Datum)."
+    ),
+    "quick_note": (
+        "Erzeuge den Eintrag für die Obsidian-Datei 'inbox.md'.\n"
+        "Format (exakt so, kein YAML-Frontmatter!):\n"
+        "## {date} – [Kurzer Titel] ({speaker})\n\n"
+        "**TL;DR:** [ein bis zwei Sätze]\n\n"
+        "### Kernaussagen\n"
+        "- [Stichpunkt]\n\n"
+        "### Action Items\n"
+        "- [ ] [Aufgabe]\n\n"
+        "(Abschnitt 'Action Items' nur, wenn Aufgaben erkennbar sind – als "
+        "Obsidian-Checkboxen mit '- [ ]'.)\n\n"
+        "Zum Schluss eine Zeile mit 3–5 Hashtags, z.B.: #idee #projekt"
+    ),
+    "restaurant_review": (
+        "Erzeuge den Eintrag für die Obsidian-Datei 'Restaurant-Reviews.md'.\n"
+        "Format (exakt so, kein YAML-Frontmatter!):\n"
+        "## [Emoji] [Restaurantname] – [Stadt] ({month_year})\n\n"
+        "1. Essen – Geschmack & Qualität:  \n"
+        "⭐️⭐️⭐️⭐️½  \n"
+        "[Beschreibung]\n\n"
+        "(... alle fünf Kategorien wie im Feld 'formatted', gleiche Sterne, "
+        "gleiche Texte. Am Zeilenende jeweils zwei Leerzeichen für den "
+        "Markdown-Zeilenumbruch.)\n\n"
+        "Zum Schluss eine Zeile mit Hashtags, immer beginnend mit #restaurant, "
+        "z.B.: #restaurant #italienisch #köln"
+    ),
+}
 
 
 # Die App wird von Kim und Kathrin genutzt – Gemini verschreibt sich sonst gern (Katrin/Katrien).
@@ -155,16 +202,20 @@ TRANSCRIBE_ONLY_PROMPT = (
     f"{NAME_SPELLING_RULE}"
 )
 
-def build_combined_prompt(template_prompt: str) -> str:
-    """Ein Call statt zwei: Transkription + Formatierung in einer Anfrage."""
+def build_combined_prompt(template_prompt: str, markdown_rule: str) -> str:
+    """Ein Call statt drei: Transkription + Google-Doc-Text + Obsidian-Markdown."""
     return (
-        "Du erhältst eine Audio-Sprachnachricht. Erledige zwei Aufgaben und "
-        "antworte als JSON mit den Feldern \"transcript\" und \"formatted\":\n\n"
+        "Du erhältst eine Audio-Sprachnachricht. Erledige drei Aufgaben und antworte "
+        "als JSON mit den Feldern \"transcript\", \"formatted\" und \"markdown\":\n\n"
         "1. \"transcript\": Transkribiere das Audio exakt. Nur der gesprochene Text, "
         "ohne Kommentare oder Erklärungen.\n\n"
-        "2. \"formatted\": Verarbeite den transkribierten Text nach folgender Anweisung:\n\n"
+        "2. \"formatted\": Verarbeite den transkribierten Text nach folgender Anweisung. "
+        "Dieser Text geht in ein Google Doc – REINER TEXT ohne Markdown-Zeichen:\n\n"
         f"{template_prompt}\n\n"
-        f"{NAME_SPELLING_RULE} Das gilt für beide Felder, transcript und formatted."
+        "3. \"markdown\": Derselbe Inhalt wie in \"formatted\", aber als Markdown für "
+        "Obsidian aufbereitet:\n\n"
+        f"{markdown_rule}\n\n"
+        f"{NAME_SPELLING_RULE} Das gilt für alle drei Felder."
     )
 
 # ─── Google Docs Helpers ───────────────────────────────────────────────────────
@@ -216,6 +267,58 @@ def write_to_google_doc(doc_id: str, template: str, formatted_text: str) -> bool
         print(f"[Docs] Unerwarteter Fehler: {e}")
         return False
 
+
+# ─── Obsidian-Postfach ────────────────────────────────────────────────────────
+# Warum ein Google DOC als Postfach und keine .md-Datei in Google Drive?
+# Service Accounts haben KEIN eigenes Drive-Kontingent und können in einem
+# normalen (Consumer-)Google-Drive keine Dateien anlegen – jeder Upload
+# scheitert mit storageQuotaExceeded. In ein Doc, das Kim gehört, dürfen sie
+# aber Text einfügen. Deshalb: Markdown-Blöcke sammeln sich in einem Postfach-
+# Doc, das lokale Skript tools/obsidian_sync.py holt sie ab und leert es.
+
+QUEUE_BEGIN = "<<<VOICECORE"
+QUEUE_END   = "<<<ENDE>>>"
+
+def append_to_obsidian_queue(doc_id: str, template: str, speaker: str, markdown: str) -> bool:
+    """Hängt einen Markdown-Block ans ENDE des Postfach-Docs. True bei Erfolg."""
+    if not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Queue] GOOGLE_SERVICE_ACCOUNT_JSON nicht gesetzt – übersprungen")
+        return False
+
+    try:
+        sa_info     = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info, scopes=GOOGLE_DOCS_SCOPES,
+        )
+        service = build("docs", "v1", credentials=credentials)
+
+        # Ans Ende anhängen (nicht oben einfügen) – der Abholer arbeitet die
+        # Einträge in der Reihenfolge ab, in der sie eingesprochen wurden.
+        doc      = service.documents().get(documentId=doc_id).execute()
+        end_idx  = doc["body"]["content"][-1]["endIndex"] - 1
+
+        stamp = datetime.now().isoformat(timespec="seconds")
+        block = (
+            f"\n{QUEUE_BEGIN}|{template}|{speaker}|{stamp}>>>\n"
+            f"{markdown}\n"
+            f"{QUEUE_END}\n"
+        )
+
+        service.documents().batchUpdate(
+            documentId=doc_id,
+            body={"requests": [{"insertText": {"location": {"index": end_idx}, "text": block}}]},
+        ).execute()
+
+        print(f"[Queue] Markdown-Block ins Postfach gelegt ({template})")
+        return True
+
+    except HttpError as e:
+        print(f"[Queue] Google API Fehler {e.status_code}: {e.reason}")
+        return False
+    except Exception as e:
+        print(f"[Queue] Unerwarteter Fehler: {e}")
+        return False
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -234,6 +337,7 @@ async def upload_audio(
     template: str = Form(...),
     destination_url: str = Form(default=""),
     speaker: str = Form(default=""),
+    obsidian_queue_url: str = Form(default=""),
     x_app_secret: str = Header(default=""),
 ):
     # Zugriffsschutz – VOR jeder Verarbeitung und jedem Gemini-Call
@@ -255,9 +359,10 @@ async def upload_audio(
 
     print(f"[VoiceCore] Job: {job_id} | Template: {template} | Sprecher:in: {speaker} | {file_size_kb} KB | {content_type}")
 
-    # ── Transkription + Formatierung in EINEM Gemini-Call ─────────────────
+    # ── Transkription + Formatierung + Markdown in EINEM Gemini-Call ──────
     transcript = None
     formatted  = None
+    markdown   = None
 
     if not gemini_client:
         transcript = "[GEMINI_API_KEY fehlt – bitte in Render setzen]"
@@ -267,15 +372,18 @@ async def upload_audio(
         audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
 
         prompt_template = TEMPLATE_PROMPTS.get(template)
+        markdown_rule   = MARKDOWN_RULES.get(template)
         try:
-            if prompt_template:
-                today  = date.today()
+            if prompt_template and markdown_rule:
+                today      = date.today()
+                fmt_kwargs = dict(
+                    date=format_german_date(today),
+                    speaker=speaker,
+                    month_year=f"{GERMAN_MONTHS[today.month - 1]} {today.year}",
+                )
                 prompt = build_combined_prompt(
-                    prompt_template.format(
-                        date=format_german_date(today),
-                        speaker=speaker,
-                        month_year=f"{GERMAN_MONTHS[today.month - 1]} {today.year}",
-                    )
+                    prompt_template.format(**fmt_kwargs),
+                    markdown_rule.format(**fmt_kwargs),
                 )
                 response = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,
@@ -290,8 +398,10 @@ async def upload_audio(
                     raise ValueError("Gemini lieferte kein gültiges JSON")
                 transcript = result.transcript.strip()
                 formatted  = result.formatted.strip()
+                markdown   = result.markdown.strip()
                 print(f"  Transkript: {transcript[:80]}...")
                 print(f"  Formatiert ({template}): {formatted[:80]}...")
+                print(f"  Markdown ({template}): {markdown[:80]}...")
             else:
                 response = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,
@@ -303,6 +413,7 @@ async def upload_audio(
             print(f"  Fehler bei Verarbeitung: {e}")
             transcript = f"[Fehler bei Transkription: {e}]"
             formatted  = None
+            markdown   = None
     # ── Google Docs Write ──────────────────────────────────────────────────
     doc_written = False
     if destination_url and formatted:
@@ -311,15 +422,26 @@ async def upload_audio(
             doc_written = write_to_google_doc(doc_id, template, formatted)
         else:
             print(f"[Docs] Konnte Doc-ID nicht aus URL extrahieren: {destination_url}")
+
+    # ── Obsidian-Postfach ──────────────────────────────────────────────────
+    queued_for_obsidian = False
+    if obsidian_queue_url and markdown:
+        queue_id = extract_doc_id(obsidian_queue_url)
+        if queue_id:
+            queued_for_obsidian = append_to_obsidian_queue(queue_id, template, speaker, markdown)
+        else:
+            print(f"[Queue] Konnte Doc-ID nicht aus URL extrahieren: {obsidian_queue_url}")
     # ─────────────────────────────────────────────────────────────────────
 
     return JSONResponse({
-        "job_id":       job_id,
-        "template":     template,
-        "file_size_kb": file_size_kb,
-        "transcript":   transcript,
-        "formatted":    formatted,
-        "doc_written":  doc_written,
+        "job_id":              job_id,
+        "template":            template,
+        "file_size_kb":        file_size_kb,
+        "transcript":          transcript,
+        "formatted":           formatted,
+        "markdown":            markdown,
+        "doc_written":         doc_written,
+        "queued_for_obsidian": queued_for_obsidian,
     })
 
 # ─── Frontend (Production) ────────────────────────────────────────────────────

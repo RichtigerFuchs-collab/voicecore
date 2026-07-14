@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Diese Datei nach obsidian_sync.config.json kopieren und ausfüllen. Die echte Config ist per .gitignore ausgeschlossen – der Service-Account-Key darf NIE ins Repo!",
+  "service_account_file": "C:/Users/Kim/Secrets/voicecore-service-account.json",
+  "queue_doc_url": "https://docs.google.com/document/d/DOC_ID_DES_POSTFACHS/edit",
+  "vault_path": "C:/Users/Kim/Proton Drive/My files/Claude/Obsidian"
+}
