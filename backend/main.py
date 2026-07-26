@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.8.0")
+app = FastAPI(title="VoiceCore API", version="0.9.0")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -37,8 +37,16 @@ TEMPLATE_PROMPTS = {
         "- Struktur: Gliedere den Text in drei logische Abschnitte: "
         "Was war los? (Ereignisse), Wie war es? (Emotionen & Atmosphäre), "
         "Gedanken danach (Reflexion & Erkenntnis).\n"
-        "- Bereinigung: Entferne Füllwörter (äh, hm, halt, quasi), Wiederholungen und "
-        "Satzkorrekturen, ohne den Sinn zu verändern.\n"
+        "- Vollständigkeit & Länge: Das ist ein Tagebuch, kein Kurzprotokoll. Bewahre JEDES "
+        "eigenständige Ereignis, jede erwähnte Person, jeden Ort und jede Anekdote – lasse "
+        "nichts weg, was zum Tag gehört. Die Länge richtet sich nach dem Input: Wird viel "
+        "erzählt (z.B. ein Ausflug, ein Restaurantbesuch, ein Urlaubstag), schreibe einen "
+        "entsprechend ausführlichen, erzählenden Bericht mit den konkreten Details "
+        "(was, wer, wo, was gegessen/erlebt). 'Was war los?' darf bei reichem Input aus "
+        "mehreren Absätzen bestehen. Nur wenn wenig oder Belangloses gesagt wird, fasse "
+        "dich entsprechend kurz.\n"
+        "- Zusammenfassen heißt hier: Füllwörter, Wiederholungen und Versprecher entfernen – "
+        "NICHT: Inhalte oder Ereignisse streichen. Erfinde nichts dazu, was nicht gesagt wurde.\n"
         "- Datum der Titelzeile: Wenn im Transkript ein konkretes Datum oder ein relativer "
         "Bezug genannt wird (z.B. 'am 8. Juli', 'gestern', 'letzten Samstag'), berechne das "
         "gemeinte Datum ausgehend von heute ({date}) und verwende es in der Titelzeile. "
@@ -109,7 +117,7 @@ app.add_middleware(
 )
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
