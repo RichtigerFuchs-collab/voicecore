@@ -117,7 +117,10 @@ app.add_middleware(
 )
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+# Hinweis: gemini-3.5-flash getestet (17.07.2026), aber vom Render-Standort
+# (Frankfurt/EU) im Gratis-Tarif nicht nutzbar → "User location is not supported".
+# Daher weiter das bewährte, in der EU verfügbare Flash-Lite.
+GEMINI_MODEL   = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
