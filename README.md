@@ -5,9 +5,11 @@
 Eine bewusst leichte One-Click-PWA für Kim & Kathrin. Ein Tap auf den Record-Button, sprechen, fertig — der formatierte Eintrag steht Sekunden später im Tagebuch-, Notiz- oder Restaurant-Doc.
 
 - **Live-App:** https://voicecore.onrender.com
-- **Version:** 0.8.0 (Stand 15.07.2026) — `/health` zeigt die live laufende Version
-- **Status:** Produktionsreif, produktiv im Einsatz
+- **Version:** 0.9.0 (Stand 26.07.2026) — `/health` zeigt die live laufende Version
+- **Status:** Stabil & deployt, aber Transkription aktuell durch Google-Geo-Sperre pausiert (siehe unten)
 - **Obsidian-Anbindung:** siehe [OBSIDIAN.md](OBSIDIAN.md)
+
+> ⚠️ **Bekannte Limitierung (Stand 26.07.2026):** Googles **kostenloser** Gemini-Tarif ist für Server in der **EU** gesperrt (`400 User location is not supported`). Render läuft in Frankfurt → Transkription scheitert derzeit. Nicht verarbeitete Aufnahmen bleiben in der App gesichert (nichts geht verloren). Lösung: Render in US-Region umziehen (bleibt 0 €) **oder** Google-Billing aktivieren (in der EU nutzbar, Kosten ~Cent). Details in [FORTSCHRITT.txt](FORTSCHRITT.txt).
 
 ---
 

@@ -1,7 +1,35 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Stand: 15.07.2026 · Version 0.8.0 · PRODUKTIONSREIF
+  Stand: 26.07.2026 · Version 0.9.0
 ═══════════════════════════════════════════════════════════════
+
+┏━━━ ⚠️  AKTUELLE HAUPT-LIMITIERUNG (Stand 26.07.2026) ━━━━━━━┓
+┃ TRANSKRIPTION AKTUELL BLOCKIERT – Google-Geo-Sperre.        ┃
+┃                                                             ┃
+┃ Gemini gibt zurueck: 400 FAILED_PRECONDITION               ┃
+┃   "User location is not supported for the API use."        ┃
+┃                                                             ┃
+┃ URSACHE: Googles KOSTENLOSER Gemini-Tarif ist fuer Server  ┃
+┃ in der EU gesperrt. Render laeuft in Frankfurt (EU).       ┃
+┃ Lief frueher zeitweise (Render-Free wechselt die Ausgangs- ┃
+┃ IP bei jedem Deploy) - jetzt konstant blockiert.           ┃
+┃ NICHT durch Code verursacht (tritt auch mit flash-lite auf).┃
+┃                                                             ┃
+┃ ZWEI LOESUNGEN (bewusst noch NICHT umgesetzt, Kim-Entscheid)┃
+┃  A) Render-Dienst in US-Region (Oregon) neu aufsetzen.     ┃
+┃     Bleibt 0 EUR. render.yaml: region: oregon. Neuer       ┃
+┃     Dienst noetig (Region ist bei Render fix pro Service),  ┃
+┃     Env-Vars neu setzen, evtl. neue URL -> .env.production  ┃
+┃     + Rebuild + PWA neu installieren.                       ┃
+┃  B) Google-Billing aktivieren (Bezahltarif ist in EU       ┃
+┃     verfuegbar). Sofort, kein Umzug. Kosten fuer das        ┃
+┃     Volumen ~Cent-Bereich, aber Kreditkarte + nicht 0 EUR.  ┃
+┃                                                             ┃
+┃ ABGEFEDERT (v0.9.0): Schlaegt die Verarbeitung fehl, wird  ┃
+┃ die Aufnahme in IndexedDB gesichert ("Nicht gesendete      ┃
+┃ Aufnahme" -> Erneut senden). Es geht also nichts verloren, ┃
+┃ solange die Sperre besteht - nur verarbeitet wird nichts.  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 ━━━ WAS WIR GEBAUT HABEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 One-Click-Sprachnotiz-App für Kim & Kathrin:
@@ -183,6 +211,26 @@ PRODUKTIV IM EINSATZ – live end-to-end getestet.
       obsidian_sync.config.json         (Rückfallebene)
     Mac-Einrichtung: tools/setup_mac.sh (launchd, alle 15 Min).
 
+  It. 13 · 26.07.2026 · Ausführlichere Tagebuch-Berichte (v0.9.0)
+    Pilot-Feedback Kim: Zusammenfassungen bei viel Erzähltem (z.B.
+    Restaurantbesuch, Urlaubstag) zu knapp. Neue Prompt-Regel
+    "Vollständigkeit & Länge" im Tagebuch: JEDES Ereignis, jede
+    Person, jeder Ort, jede Anekdote bleibt erhalten; Länge
+    skaliert mit dem Input; nur Belangloses wird kurz gehalten.
+    Zusammenfassen = Füllwörter/Wiederholungen raus, NICHT
+    Inhalte streichen. Modellunabhängig (steckt im Prompt).
+    → Konnte wegen der Geo-Sperre (siehe oben) noch nicht live
+      end-to-end verifiziert werden; Prompt-Logik lokal geprüft.
+
+  It. 14 · 26.07.2026 · Modell-Experiment 3.5 Flash (zurückgedreht)
+    Versuch: Modell-Default auf gemini-3.5-flash (laut Preisliste
+    gratis, eine Klasse über flash-lite). Ergebnis: vom Render-
+    Standort (EU) NICHT nutzbar ("User location is not supported").
+    Sofort zurück auf gemini-3.1-flash-lite. LEHRE: "gratis laut
+    Preisliste" ≠ "aus der EU nutzbar". Beim Modell-Check IMMER
+    fragen: in der EU / von Frankfurt aus im Gratistarif nutzbar?
+    Dieses Experiment hat die Geo-Sperre (oben) sichtbar gemacht.
+
 ━━━ WICHTIGE REGELN FÜR KOMMENDE SESSIONS/AGENTEN ━━━━━━━━━━━
 
   1. KATHRIN IMMER MIT "TH" – nie "Katrin". Gilt für Code,
@@ -227,6 +275,18 @@ PRODUKTIV IM EINSATZ – live end-to-end getestet.
      "Proton Drive/My files/Claude/Obsidian" und enthält SEHR
      private Inhalte. Vor Schreibzugriffen IMMER Backup ziehen und
      danach prüfen, dass Bestandsinhalte vollständig erhalten sind.
+ 14. GEMINI-GRATISTARIF IST IN DER EU GESPERRT ("User location
+     is not supported"). Render steht in Frankfurt. Modell-Checks
+     und -Wechsel immer daran messen: aus der EU nutzbar? Siehe
+     die Haupt-Limitierung ganz oben. Lösung wäre US-Region oder
+     Billing – Stand 26.07. bewusst offen gelassen.
+
+━━━ OFFEN – ZUERST ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [ ] ⚠️ GEO-SPERRE LÖSEN, damit Transkription wieder läuft
+      (A: Render US-Region ODER B: Google-Billing – siehe oben).
+      Bis dahin ist die App zwar stabil/lauffähig, verarbeitet
+      aber keine neuen Aufnahmen (sie bleiben gesichert).
 
 ━━━ OFFEN (nice-to-have, nichts blockierend) ━━━━━━━━━━━━━━━━
 
