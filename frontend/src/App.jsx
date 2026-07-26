@@ -235,7 +235,19 @@ export default function App() {
     }
     if (!response.ok) throw new Error(`Server-Fehler: ${response.status}`)
 
-    return response.json()
+    const data = await response.json()
+
+    // Server hat mit 200 geantwortet, aber die KI-Verarbeitung ist gescheitert
+    // (z.B. Transkriptions-Fehler, Modell nicht erreichbar). Als Fehler behandeln,
+    // damit die Aufnahme aufbewahrt wird und NICHT verloren geht.
+    const verarbeitungFehlgeschlagen =
+      !data.formatted ||
+      (typeof data.transcript === 'string' && data.transcript.startsWith('['))
+    if (verarbeitungFehlgeschlagen) {
+      throw new Error('Verarbeitung fehlgeschlagen – die Aufnahme ist gesichert, du kannst sie erneut senden.')
+    }
+
+    return data
   }
 
   async function uploadAudio(chunks, mimeType) {
