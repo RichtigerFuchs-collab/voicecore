@@ -2,8 +2,10 @@
 
 import json
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
+import httpx
+from google import genai
 from google.genai import types
 
 from backend.diary import (
@@ -80,6 +82,11 @@ class DiaryPipelineTests(unittest.TestCase):
         self.assertEqual(markdown.removeprefix("## ").replace("\n### ", "\n"), formatted)
         for call in calls:
             self.assertEqual(call.kwargs["config"].max_output_tokens, MAX_OUTPUT_TOKENS)
+            options = call.kwargs["config"].http_options
+            self.assertEqual(options.timeout, 90000)
+            self.assertEqual(options.retry_options.attempts, 3)
+            self.assertEqual(options.retry_options.http_status_codes,
+                             [408, 429, 500, 502, 503, 504])
         self.assertIn("Kathrin", calls[0].kwargs["config"].system_instruction)
         self.assertIn("Kathrin", calls[1].kwargs["config"].system_instruction)
         self.assertIn("Kathrin", audit_data["context"])
@@ -205,6 +212,72 @@ class DiaryPipelineTests(unittest.TestCase):
             with self.subTest(responses=responses):
                 with self.assertRaises(DiaryProcessingError):
                     self.run_pipeline(responses)
+
+    def run_sdk_pipeline(self, audit_statuses):
+        requests = []
+        stages = []
+        statuses = iter(audit_statuses)
+
+        def handler(request):
+            payload = json.loads(request.content)
+            requests.append(payload)
+            instruction = payload["systemInstruction"]["parts"][0]["text"]
+            if instruction.startswith("Prüfe den Tagebucheintrag"):
+                stages.append("audit")
+                status = next(statuses)
+                if status != 200:
+                    return httpx.Response(status, json={"error": {
+                        "code": status, "message": "secret-provider-detail",
+                        "status": "UNAVAILABLE" if status == 503 else "INVALID_ARGUMENT"}})
+                text = json.dumps({"missing_contents": [], "distorted_contents": [],
+                                   "unsupported_contents": []})
+            elif "reference" in instruction:
+                self.fail("Unexpected instruction")
+            elif "responseSchema" in payload.get("generationConfig", {}):
+                stages.append("draft")
+                text = json.dumps({"formatted": FORMATTED})
+            else:
+                stages.append("transcript")
+                text = TRANSCRIPT
+            return httpx.Response(200, json={"candidates": [{
+                "content": {"role": "model", "parts": [{"text": text}]},
+                "finishReason": "STOP"}]})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as http_client:
+            with genai.Client(api_key="synthetic-test-key", http_options=types.HttpOptions(
+                    httpx_client=http_client)) as sdk_client:
+                with patch("tenacity.nap.time.sleep"):
+                    try:
+                        result = process_diary(sdk_client, "gemini-3.1-flash-lite", self.audio,
+                                               self.prompt, TRANSCRIBE_ONLY_PROMPT)
+                    except DiaryProcessingError as exc:
+                        return exc, stages, requests
+        return result, stages, requests
+
+    def test_sdk_retries_temporary_503_only_for_failed_audit(self):
+        result, stages, requests = self.run_sdk_pipeline([503, 200])
+        self.assertEqual(result, (TRANSCRIPT, FORMATTED, diary_to_markdown(FORMATTED)))
+        self.assertEqual(stages, ["transcript", "draft", "audit", "audit"])
+        self.assertEqual(requests[2], requests[3])
+
+    def test_sdk_exhausted_503_keeps_transcript_and_returns_safe_error(self):
+        result, stages, requests = self.run_sdk_pipeline([503, 503, 503])
+        self.assertIsInstance(result, DiaryProcessingError)
+        self.assertEqual(result.transcript, TRANSCRIPT)
+        self.assertIn("Inhaltsprüfung", str(result))
+        self.assertIn("503", str(result))
+        self.assertIn("vorübergehend", str(result))
+        self.assertNotIn("secret-provider-detail", str(result))
+        self.assertEqual(stages, ["transcript", "draft", "audit", "audit", "audit"])
+        self.assertEqual(requests[2], requests[3])
+        self.assertEqual(requests[3], requests[4])
+
+    def test_sdk_does_not_retry_400(self):
+        result, stages, requests = self.run_sdk_pipeline([400])
+        self.assertIsInstance(result, DiaryProcessingError)
+        self.assertEqual(result.transcript, TRANSCRIPT)
+        self.assertNotIn("secret-provider-detail", str(result))
+        self.assertEqual(stages, ["transcript", "draft", "audit"])
 
     def test_markdown_preserves_long_body_with_quotes_dates_numbers_and_paragraphs(self):
         body = "\n\n".join(f'Szene {i}: Kathrin sagte „Das bleibt!“, am Rhein um 18:30 Uhr.'
