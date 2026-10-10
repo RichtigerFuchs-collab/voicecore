@@ -25,7 +25,7 @@ else:  # Unterstützt weiterhin: cd backend && uvicorn main:app
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.10.0")
+app = FastAPI(title="VoiceCore API", version="0.10.1")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -447,7 +447,7 @@ async def upload_audio(
                 transcript = response.text.strip()
                 print(f"  Transkript: {transcript[:80]}...")
         except DiaryProcessingError as e:
-            print("  Tagebuchverarbeitung fehlgeschlagen; kein Export")
+            print(f"  Tagebuchverarbeitung fehlgeschlagen: {e}; kein Export", flush=True)
             transcript = e.transcript or ""
             processing_error = str(e)
             formatted = None
