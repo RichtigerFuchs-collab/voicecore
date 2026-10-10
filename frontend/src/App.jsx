@@ -107,9 +107,16 @@ export default function App() {
 
   // Nicht gesendete Aufnahme (überlebt auch App-Neustart via IndexedDB)
   const [pending, setPending] = useState(null)
+  const [pendingLoaded, setPendingLoaded] = useState(false)
 
   useEffect(() => {
-    loadPending().then(rec => rec && setPending(rec)).catch(() => {})
+    loadPending().then(rec => {
+      if (rec) setPending(rec)
+      setPendingLoaded(true)
+    }).catch(() => {
+      setErrorMsg('Gespeicherte Aufnahmen konnten nicht geladen werden. Bitte die App erneut öffnen.')
+      setStatus('error')
+    })
 
     // Weck-Ping: Render Free schläft nach 15 Min ein (~40 s Cold Start).
     // Beim App-Öffnen sofort anklopfen – während der Aufnahme wacht der
@@ -153,6 +160,7 @@ export default function App() {
   // ── Aufnahme starten ─────────────────────────────────────────────────────
 
   async function startRecording() {
+    if (!pendingLoaded || pending) return
     setResult(null)
     setErrorMsg('')
 
@@ -240,11 +248,9 @@ export default function App() {
     // Server hat mit 200 geantwortet, aber die KI-Verarbeitung ist gescheitert
     // (z.B. Transkriptions-Fehler, Modell nicht erreichbar). Als Fehler behandeln,
     // damit die Aufnahme aufbewahrt wird und NICHT verloren geht.
-    const verarbeitungFehlgeschlagen =
-      !data.formatted ||
-      (typeof data.transcript === 'string' && data.transcript.startsWith('['))
+    const verarbeitungFehlgeschlagen = Boolean(data.error) || !data.formatted
     if (verarbeitungFehlgeschlagen) {
-      throw new Error('Verarbeitung fehlgeschlagen – die Aufnahme ist gesichert, du kannst sie erneut senden.')
+      throw new Error(data.error || 'Verarbeitung fehlgeschlagen. Bitte erneut senden.')
     }
 
     return data
@@ -252,21 +258,42 @@ export default function App() {
 
   async function uploadAudio(chunks, mimeType) {
     const audioBlob = new Blob(chunks, { type: mimeType || 'audio/webm' })
+    const rec = { blob: audioBlob, mimeType, template, speaker, savedAt: Date.now() }
+    setPending(rec)
+
+    // Vor der längeren Verarbeitung sichern, auch für Reload/Schließen.
+    // Ohne lokale Sicherung nicht senden: die Aufnahme bleibt für einen Retry
+    // im Arbeitsspeicher, bis die Sicherung wieder möglich ist.
+    try {
+      await savePending(rec)
+    } catch {
+      setErrorMsg('Die Aufnahme konnte nicht dauerhaft gespeichert werden. Bitte die App offen lassen und erneut senden.')
+      setStatus('error')
+      return
+    }
 
     try {
       const data = await sendRecording(audioBlob, mimeType, template, speaker)
-      setResult(data)
-      setStatus('done')
+      await completeRecording(data, rec)
     } catch (err) {
-      // Aufnahme aufbewahren, damit sie nicht verloren geht
-      const rec = { blob: audioBlob, mimeType, template, speaker, savedAt: Date.now() }
-      try {
-        await savePending(rec)
-        setPending(rec)
-        setErrorMsg(`${err.message} — die Aufnahme ist gespeichert, du kannst sie unten erneut senden.`)
-      } catch {
-        setErrorMsg(err.message)
-      }
+      setErrorMsg(`${err.message} Die Aufnahme ist gespeichert, du kannst sie unten erneut senden.`)
+      setStatus('error')
+    }
+  }
+
+  async function completeRecording(data, rec) {
+    setResult(data)
+    // Nach erfolgreicher Antwort niemals wegen eines lokalen Löschfehlers
+    // nochmals exportieren. Der Marker bleibt auch nach Reload erhalten.
+    const processed = { ...rec, processed: true }
+    setPending(processed)
+    try {
+      await savePending(processed)
+      await clearPendingDb()
+      setPending(null)
+      setStatus('done')
+    } catch {
+      setErrorMsg('Der Eintrag wurde verarbeitet. Die lokale Sicherung konnte nicht entfernt werden. Bitte unten lokal entfernen; die Aufnahme wird nicht erneut gesendet.')
       setStatus('error')
     }
   }
@@ -275,16 +302,18 @@ export default function App() {
 
   async function retryPending() {
     if (!pending || status === 'uploading' || status === 'recording') return
+    if (pending.processed) {
+      await discardPending()
+      return
+    }
     setStatus('uploading')
     setErrorMsg('')
     setResult(null)
 
     try {
+      await savePending(pending)
       const data = await sendRecording(pending.blob, pending.mimeType, pending.template, pending.speaker)
-      await clearPendingDb().catch(() => {})
-      setPending(null)
-      setResult(data)
-      setStatus('done')
+      await completeRecording(data, pending)
     } catch (err) {
       setErrorMsg(err.message)
       setStatus('error')
@@ -292,8 +321,15 @@ export default function App() {
   }
 
   async function discardPending() {
-    await clearPendingDb().catch(() => {})
-    setPending(null)
+    try {
+      await clearPendingDb()
+      setPending(null)
+      setErrorMsg('')
+      setStatus('idle')
+    } catch {
+      setErrorMsg('Die gespeicherte Aufnahme konnte nicht entfernt werden. Bitte erneut versuchen.')
+      setStatus('error')
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -390,7 +426,7 @@ export default function App() {
       {/* Großer Record-Button */}
       <button
         onClick={handleButtonClick}
-        disabled={isDisabled}
+        disabled={isDisabled || !pendingLoaded || Boolean(pending)}
         style={{
           ...styles.button,
           background: isRecording ? '#cc0000' : '#1a1a2e',
@@ -411,7 +447,7 @@ export default function App() {
       {/* Nicht gesendete Aufnahme */}
       {pending && (
         <div style={styles.pendingCard}>
-          <p style={styles.pendingTitle}>Nicht gesendete Aufnahme</p>
+          <p style={styles.pendingTitle}>{pending.processed ? 'Verarbeitete Aufnahme: lokale Sicherung' : 'Nicht gesendete Aufnahme'}</p>
           <p style={styles.pendingMeta}>
             {TEMPLATES.find(t => t.id === pending.template)?.label || pending.template}
             {' · '}{pending.speaker}
@@ -425,7 +461,7 @@ export default function App() {
               disabled={isDisabled || isRecording}
               style={styles.pendingRetry}
             >
-              Erneut senden
+              {pending.processed ? 'Lokal entfernen' : 'Erneut senden'}
             </button>
             <button
               onClick={discardPending}

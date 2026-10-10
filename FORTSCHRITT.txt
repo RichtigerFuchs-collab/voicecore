@@ -1,7 +1,30 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Stand: 26.07.2026 · Version 0.9.0
+  Release: 10.10.2026 · Version 0.10.0
 ═══════════════════════════════════════════════════════════════
+
+━━━ AKTUELLE ENTWICKLUNG: INHALTSTREUE TAGEBÜCHER ━━━━━━━━━━━
+  Nutzerfeedback 10.10.2026: Lange Eingaben werden weiterhin
+  zu stark gekürzt. Umgesetzt:
+  - backend/diary.py: separate Transkription, vollständige
+    Ausformulierung und Inhaltsaudit gegen das ganze Transkript.
+  - Bei Auslassungen, Verfälschungen oder erfundenen Inhalten:
+    ein Korrekturversuch und erneutes Audit; danach ggf. Fehler.
+  - finish_reason und gültige/nichtleere Ergebnisse jeder Stufe
+    prüfen. Kein Export bei MAX_TOKENS oder fehlgeschlagenem Audit.
+  - Markdown deterministisch aus demselben geprüften Plaintext.
+  - Füllwörter/Dopplungen bereinigen, Gefühle und Gedankengänge
+    bewahren. Keine erfundenen Inhalte für leere Abschnitte.
+  - Frontend sichert Audio vor Upload und verhindert Überschreiben
+    einer offenen Aufnahme innerhalb derselben Appinstanz.
+  - Quick Note und Restaurant Review behalten den bisherigen Pfad.
+  Normalfall 3 Gemini-Aufrufe, Korrekturfall 5. Mehr Latenz und
+  API-Verbrauch; kein Modellwechsel und keine neue Runtime-Abhängigkeit.
+  Lokale Tests/Abnahme: tests/README.md. Echte KI- und Audio-Abnahme
+  steht aus, kein lokaler Gemini-Schlüssel. Livegang von Kim am
+  10.10.2026 beauftragt; laufende Version über /health prüfen.
+  Die folgenden Geo-/Live-Statusangaben sind historische Angaben
+  vom 26.07.2026 und wurden nicht erneut verifiziert.
 
 ┏━━━ ⚠️  AKTUELLE HAUPT-LIMITIERUNG (Stand 26.07.2026) ━━━━━━━┓
 ┃ TRANSKRIPTION AKTUELL BLOCKIERT – Google-Geo-Sperre.        ┃

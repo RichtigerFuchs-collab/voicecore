@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -17,9 +18,14 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from pydantic import BaseModel
 
+if __package__:
+    from .diary import DiaryProcessingError, process_diary
+else:  # Unterstützt weiterhin: cd backend && uvicorn main:app
+    from diary import DiaryProcessingError, process_diary
+
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.9.0")
+app = FastAPI(title="VoiceCore API", version="0.10.0")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -34,19 +40,28 @@ TEMPLATE_PROMPTS = {
         "ihren emotionalen Originalformulierungen – besonders gefühlvolle oder markante Sätze "
         "dürfen (leicht geglättet) wörtlich erhalten bleiben. Lieber die eigenen Worte der "
         "Person als neutrale Umschreibungen. Schreibe in der Ich-Form.\n"
-        "- Struktur: Gliedere den Text in drei logische Abschnitte: "
+        "- Struktur: Gliedere den Text in passende Abschnitte mit diesen Überschriften: "
         "Was war los? (Ereignisse), Wie war es? (Emotionen & Atmosphäre), "
-        "Gedanken danach (Reflexion & Erkenntnis).\n"
+        "Gedanken danach (Reflexion & Erkenntnis). Nutze pro Abschnitt beliebig viele Absätze. "
+        "Lasse einen Abschnitt weg, wenn dazu nichts erzählt wurde; erfinde keine Gefühle "
+        "oder Reflexionen, um das Layout zu füllen.\n"
         "- Vollständigkeit & Länge: Das ist ein Tagebuch, kein Kurzprotokoll. Bewahre JEDES "
         "eigenständige Ereignis, jede erwähnte Person, jeden Ort und jede Anekdote – lasse "
-        "nichts weg, was zum Tag gehört. Die Länge richtet sich nach dem Input: Wird viel "
+        "keine eigenständigen Inhalte zugunsten von Kürze oder einer vermeintlichen "
+        "Hauptaussage weg. Die Länge richtet sich nach dem Input: Wird viel "
         "erzählt (z.B. ein Ausflug, ein Restaurantbesuch, ein Urlaubstag), schreibe einen "
         "entsprechend ausführlichen, erzählenden Bericht mit den konkreten Details "
         "(was, wer, wo, was gegessen/erlebt). 'Was war los?' darf bei reichem Input aus "
-        "mehreren Absätzen bestehen. Nur wenn wenig oder Belangloses gesagt wird, fasse "
-        "dich entsprechend kurz.\n"
-        "- Zusammenfassen heißt hier: Füllwörter, Wiederholungen und Versprecher entfernen – "
-        "NICHT: Inhalte oder Ereignisse streichen. Erfinde nichts dazu, was nicht gesagt wurde.\n"
+        "mehreren Absätzen bestehen. Auch kurze Nebenthemen und die letzten erzählten "
+        "Details bleiben erhalten. Im Zweifel bleibt ein Detail erhalten. Es gibt keine "
+        "pauschale Ziellänge oder Kürzungsquote.\n"
+        "- Inhaltstreue: Bewahre Gefühle, Bewertungen, Zweifel, Begründungen und den Verlauf "
+        "von Gedankengängen in Bedeutung und emotionaler Intensität. Ersetze eine Szene "
+        "nicht durch ein allgemeines Fazit. Vermutungen bleiben Vermutungen.\n"
+        "- Sprachlich bereinigen: Nur Füllwörter, Versprecher und inhaltlich identische "
+        "Dopplungen entfernen. Wiederholungen mit neuen Details, veränderter Bewertung "
+        "oder emotionaler Bedeutung bleiben erhalten. Berücksichtige explizite Selbstkorrekturen. "
+        "Erfinde keine Ereignisse, Gefühle, Motive oder erklärenden Zusammenhänge.\n"
         "- Datum der Titelzeile: Wenn im Transkript ein konkretes Datum oder ein relativer "
         "Bezug genannt wird (z.B. 'am 8. Juli', 'gestern', 'letzten Samstag'), berechne das "
         "gemeinte Datum ausgehend von heute ({date}) und verwende es in der Titelzeile. "
@@ -370,13 +385,16 @@ async def upload_audio(
 
     print(f"[VoiceCore] Job: {job_id} | Template: {template} | Sprecher:in: {speaker} | {file_size_kb} KB | {content_type}")
 
-    # ── Transkription + Formatierung + Markdown in EINEM Gemini-Call ──────
+    # Tagebuch: getrennte Verarbeitung mit Inhaltsprüfung vor den Exporten.
+    # Andere Vorlagen behalten den kombinierten Gemini-Aufruf.
     transcript = None
     formatted  = None
     markdown   = None
+    processing_error = None
 
     if not gemini_client:
         transcript = "[GEMINI_API_KEY fehlt – bitte in Render setzen]"
+        processing_error = "Die KI-Verarbeitung ist derzeit nicht eingerichtet."
     else:
         # Codec-Parameter abschneiden: "audio/webm;codecs=opus" → "audio/webm"
         mime_type  = content_type.split(";")[0].strip()
@@ -392,27 +410,35 @@ async def upload_audio(
                     speaker=speaker,
                     month_year=f"{GERMAN_MONTHS[today.month - 1]} {today.year}",
                 )
-                prompt = build_combined_prompt(
-                    prompt_template.format(**fmt_kwargs),
-                    markdown_rule.format(**fmt_kwargs),
-                )
-                response = gemini_client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=[audio_part, prompt],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=VoiceResult,
-                    ),
-                )
-                result = response.parsed
-                if result is None:
-                    raise ValueError("Gemini lieferte kein gültiges JSON")
-                transcript = result.transcript.strip()
-                formatted  = result.formatted.strip()
-                markdown   = result.markdown.strip()
-                print(f"  Transkript: {transcript[:80]}...")
-                print(f"  Formatiert ({template}): {formatted[:80]}...")
-                print(f"  Markdown ({template}): {markdown[:80]}...")
+                if template == "tagebuch":
+                    transcript, formatted, markdown = await asyncio.to_thread(
+                        process_diary, gemini_client, GEMINI_MODEL, audio_part,
+                        prompt_template.format(**fmt_kwargs) + "\n\n" + NAME_SPELLING_RULE,
+                        TRANSCRIBE_ONLY_PROMPT,
+                    )
+                    print("  Tagebuchverarbeitung: KI-Inhaltsprüfung bestanden")
+                else:
+                    prompt = build_combined_prompt(
+                        prompt_template.format(**fmt_kwargs),
+                        markdown_rule.format(**fmt_kwargs),
+                    )
+                    response = gemini_client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=[audio_part, prompt],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=VoiceResult,
+                        ),
+                    )
+                    result = response.parsed
+                    if result is None:
+                        raise ValueError("Gemini lieferte kein gültiges JSON")
+                    transcript = result.transcript.strip()
+                    formatted  = result.formatted.strip()
+                    markdown   = result.markdown.strip()
+                    print(f"  Transkript: {transcript[:80]}...")
+                    print(f"  Formatiert ({template}): {formatted[:80]}...")
+                    print(f"  Markdown ({template}): {markdown[:80]}...")
             else:
                 response = gemini_client.models.generate_content(
                     model=GEMINI_MODEL,
@@ -420,9 +446,20 @@ async def upload_audio(
                 )
                 transcript = response.text.strip()
                 print(f"  Transkript: {transcript[:80]}...")
+        except DiaryProcessingError as e:
+            print("  Tagebuchverarbeitung fehlgeschlagen; kein Export")
+            transcript = e.transcript or ""
+            processing_error = str(e)
+            formatted = None
+            markdown = None
         except Exception as e:
-            print(f"  Fehler bei Verarbeitung: {e}")
-            transcript = f"[Fehler bei Transkription: {e}]"
+            if template == "tagebuch":
+                print(f"  Tagebuchverarbeitung fehlgeschlagen ({type(e).__name__}); kein Export")
+                transcript = None
+                processing_error = "Der Tagebucheintrag konnte nicht vollständig verarbeitet werden."
+            else:
+                print(f"  Fehler bei Verarbeitung: {e}")
+                transcript = f"[Fehler bei Transkription: {e}]"
             formatted  = None
             markdown   = None
     # ── Google Docs Write ──────────────────────────────────────────────────
@@ -453,6 +490,7 @@ async def upload_audio(
         "markdown":            markdown,
         "doc_written":         doc_written,
         "queued_for_obsidian": queued_for_obsidian,
+        "error":               processing_error,
     })
 
 # ─── Frontend (Production) ────────────────────────────────────────────────────

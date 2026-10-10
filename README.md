@@ -4,12 +4,14 @@
 
 Eine bewusst leichte One-Click-PWA für Kim & Kathrin. Ein Tap auf den Record-Button, sprechen, fertig — der formatierte Eintrag steht Sekunden später im Tagebuch-, Notiz- oder Restaurant-Doc.
 
+**Release v0.10.0 vom 10.10.2026.** Tagebücher werden getrennt transkribiert, ausformuliert und gegen das Referenztranskript geprüft. Die laufende Version zeigt `/health`. Die Abnahme mit echten Aufnahmen steht noch aus.
+
 - **Live-App:** https://voicecore.onrender.com
-- **Version:** 0.9.0 (Stand 26.07.2026) — `/health` zeigt die live laufende Version
-- **Status:** Stabil & deployt, aber Transkription aktuell durch Google-Geo-Sperre pausiert (siehe unten)
+- **Release:** 0.10.0 — `/health` zeigt die live laufende Version
+- **Hosting:** Bestehender Render-Free-Service in Frankfurt; Modell weiterhin `gemini-3.1-flash-lite`.
 - **Obsidian-Anbindung:** siehe [OBSIDIAN.md](OBSIDIAN.md)
 
-> ⚠️ **Bekannte Limitierung (Stand 26.07.2026):** Googles **kostenloser** Gemini-Tarif ist für Server in der **EU** gesperrt (`400 User location is not supported`). Render läuft in Frankfurt → Transkription scheitert derzeit. Nicht verarbeitete Aufnahmen bleiben in der App gesichert (nichts geht verloren). Lösung: Render in US-Region umziehen (bleibt 0 €) **oder** Google-Billing aktivieren (in der EU nutzbar, Kosten ~Cent). Details in [FORTSCHRITT.txt](FORTSCHRITT.txt).
+> ⚠️ **Historischer Fehlerbericht vom 26.07.2026, aktuell nicht erneut verifiziert:** Googles **kostenloser** Gemini-Tarif ist für Server in der **EU** gesperrt (`400 User location is not supported`). Render läuft in Frankfurt → Transkription scheitert derzeit. Nicht verarbeitete Aufnahmen bleiben in der App gesichert (nichts geht verloren). Lösung: Render in US-Region umziehen (bleibt 0 €) **oder** Google-Billing aktivieren (in der EU nutzbar, Kosten ~Cent). Details in [FORTSCHRITT.txt](FORTSCHRITT.txt).
 
 ---
 
@@ -25,18 +27,40 @@ Umschalter über der Template-Auswahl. Die Wahl wird **pro Gerät gespeichert** 
 
 | Template | Was passiert |
 |----------|--------------|
-| **Tagebuch** | Persönlicher Eintrag in 3 Abschnitten (Was war los? / Wie war es? / Gedanken danach). Titelzeile: `8. Juli 2026 – Kreativer Titel (Kathrin)` — **Datum zuerst**, Name in Klammern. Bleibt nah an den **emotionalen Originalformulierungen** der sprechenden Person. |
+| **Tagebuch** | Inhaltstreuer persönlicher Eintrag mit passenden Abschnitten (Was war los? / Wie war es? / Gedanken danach). Abschnitte ohne erzählten Inhalt entfallen. Titelzeile: `8. Juli 2026 – Kreativer Titel (Kathrin)`. **Datum zuerst**, Name in Klammern. Bleibt nah an den **emotionalen Originalformulierungen** der sprechenden Person. |
 | **Quick Note** | TL;DR, Kernaussagen als Stichpunkte, Action Items, 3–5 Hashtags. |
 | **Restaurant Review** | Folgt exakt dem Standardlayout des bestehenden Docs: Essens-Emoji + `Name – Stadt (Monat Jahr)`, 5 nummerierte Kategorien (Essen, Ambiente, Service, Preis-Leistung, Besonderheit), ⭐️-Sterne mit ½ für halbe Sterne, keine Gesamtbewertung. |
 
 ### Intelligente Datumserkennung (Tagebuch)
 Wird im Audio ein Datum genannt („das war am 8. Juli“, „gestern“, „letzten Samstag“), rechnet Gemini es vom heutigen Datum aus um und setzt **dieses** Datum in die Titelzeile. Ohne Angabe (oder bei „heute“) gilt das heutige Datum. Datumsformat immer deutsch („8. Juli 2026“), unabhängig vom Server-Locale.
 
+### Inhaltstreue Tagebucheinträge (v0.10.0)
+
+Tagebücher werden sprachlich geglättet und strukturiert. Alle eigenständigen Erlebnisse, Szenen, Details, Gefühle und Gedankengänge sollen erhalten bleiben. Es gibt keine feste Ziellänge und keine Kürzungsquote. Nur Füllwörter, Versprecher und echte Dopplungen dürfen entfallen. Abschnitte ohne erzählten Inhalt entfallen, statt mit erfundenen Gefühlen oder Reflexionen gefüllt zu werden.
+
+Die Vorlage `tagebuch` verwendet einen eigenen Verarbeitungspfad:
+
+1. Audio vollständig transkribieren.
+2. Den ganzen Tagebucheintrag aus dem Transkript erstellen.
+3. In einem separaten Aufruf gegen das vollständige Transkript auf Auslassungen, Bedeutungsveränderungen und erfundene Inhalte prüfen.
+4. Bei Beanstandungen genau einmal korrigieren und erneut prüfen. Besteht der Eintrag die Prüfung weiterhin nicht, wird nichts exportiert.
+5. Obsidian-Markdown aus dem geprüften Plaintext ableiten. Dabei werden ausschließlich Überschriftenmarker ergänzt. Beide Exporte enthalten denselben Eintrag.
+
+Jede Stufe erhält ein eigenes Ausgabebudget von 32.768 Tokens. `MAX_TOKENS`, andere Abbrüche, leere oder ungültige Ergebnisse werden als Fehler behandelt, auch wenn eine JSON-Antwort teilweise lesbar ist. Die App zeigt eine sichere Fehlerursache und bietet erneutes Senden an. Die Aufnahme wird **vor** dem Upload lokal gesichert. Solange eine Sicherung offen ist, wird in derselben Appinstanz keine neue Aufnahme gestartet. Eine bereits verarbeitete Aufnahme wird bei einem lokalen Löschfehler nur lokal entfernt und nicht erneut exportiert.
+
+Der Normalfall benötigt drei Gemini-Aufrufe, der Korrekturfall fünf. Das erhöht Wartezeit und API-Verbrauch. `quick_note` und `restaurant_review` behalten ihren bisherigen kombinierten Aufruf. Kein Modellwechsel und keine neue Runtime-Abhängigkeit.
+
+Die Inhaltsprüfung ist eine zusätzliche KI-Prüfung, keine Garantie. Sie kann übersehene Informationen im Transkript nicht aus dem Audio rekonstruieren und selbst Fehler übersehen. Geht die HTTP-Erfolgsantwort nach einem Export verloren, kann ein Retry weiterhin doppelte Einträge erzeugen; serverseitige Idempotenz ist nicht Teil dieser Änderung. Ebenso ist der einzelne Aufnahmeslot nicht gegen mehrere gleichzeitig geöffnete Appinstanzen abgesichert.
+
+API-Grundlage für Abbrucherkennung und Ausgabebudgets: [GenerateContent / FinishReason](https://ai.google.dev/api/generate-content#FinishReason), [Gemini 3.1 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite).
+
+Abnahmefälle und lokale Prüfbefehle: [tests/README.md](tests/README.md).
+
 ### Google-Docs-Anbindung
 Im ⚙-Settings-Panel wird pro Template eine Google-Docs-URL hinterlegt (gespeichert im Browser). Neue Einträge werden **oben** ins Doc geschrieben (prepend) mit Trennlinie und Kopfzeile (Template · Datum · Uhrzeit). Der Output ist bewusst **reiner Text ohne Markdown** — `##` und `**` würden im Doc als sichtbare Zeichen landen. Feedback in der App: `✓ Gespeichert in Google Doc` (grün) oder `⚠ konnte nicht beschrieben werden` (amber).
 
 ### Obsidian-Anbindung (seit v0.8.0)
-Parallel zum Google Doc wandert jede Notiz als Markdown in eine von drei Sammel-Dateien des Vaults: Tagebuch → `K&K Tagebuch.md`, Quick Note → `00_Inbox/inbox.md`, Review → `Restaurant-Reviews.md`. Gemini liefert dafür ein drittes Feld (`markdown`) im selben Aufruf. Die Brücke ist ein **Postfach-Doc**, das ein lokaler Abholer (`tools/obsidian_sync.py`) alle 15 Minuten leert — auf PC **und** Mac. Vollständige Erklärung und Einrichtung: **[OBSIDIAN.md](OBSIDIAN.md)**.
+Parallel zum Google Doc wandert jede Notiz als Markdown in eine von drei Sammel-Dateien des Vaults: Tagebuch → `K&K Tagebuch.md`, Quick Note → `00_Inbox/inbox.md`, Review → `Restaurant-Reviews.md`. Bei Tagebüchern leitet das Backend Markdown aus dem geprüften Plaintext ab; bei den anderen Vorlagen liefert Gemini das Feld `markdown` im kombinierten Aufruf. Die Brücke ist ein **Postfach-Doc**, das ein lokaler Abholer (`tools/obsidian_sync.py`) alle 15 Minuten leert — auf PC **und** Mac. Vollständige Erklärung und Einrichtung: **[OBSIDIAN.md](OBSIDIAN.md)**.
 
 ### Kein Warten auf Cold Starts
 Dreistufig, weil GitHub-Cron allein nachweislich versagt (gemessen: Läufe nur alle 1–3,5 Stunden statt alle 10 Minuten):
@@ -55,8 +79,9 @@ Browser (React-PWA, MediaRecorder)
    │  POST /upload  (audio, template, speaker, destination_url)
    ▼
 FastAPI auf Render (ein Service, liefert auch das Frontend aus)
-   │  EIN Gemini-Call: Audio inline + kombinierter Prompt
-   │  → JSON {transcript, formatted} (per response_schema erzwungen)
+   │  Tagebuch: Transkript → Eintrag → Inhaltsprüfung (ggf. Korrektur + Prüfung)
+   │  Andere Vorlagen: EIN Gemini-Call mit kombiniertem Prompt
+   │  → {transcript, formatted, markdown}
    ▼
 Google Docs API (Service Account, batchUpdate/insertText an Index 1)
 ```
@@ -77,6 +102,7 @@ Google Docs API (Service Account, batchUpdate/insertText an Index 1)
 | Datei | Inhalt |
 |-------|--------|
 | `backend/main.py` | Gesamtes Backend: Template-Prompts, Gemini-Call, Docs-Write, Routes |
+| `backend/diary.py` | Getrennte Tagebuchverarbeitung, Abbrucherkennung, Inhaltsprüfung, Markdown-Ableitung |
 | `frontend/src/App.jsx` | Gesamtes Frontend: Aufnahme, Sprecher-Toggle, Settings, Ergebnis |
 | `main.py` (Root) | Einstiegspunkt für Render (importiert `backend.main`) |
 | `requirements.txt` (Root) | **Muss identisch mit `backend/requirements.txt` sein** — Render installiert die Root-Datei! |
@@ -85,7 +111,7 @@ Google Docs API (Service Account, batchUpdate/insertText an Index 1)
 
 ### API
 
-**`GET /health`** → `{"status": "ok", "version": "0.6.0", "gemini": true, "model": "gemini-3.1-flash-lite"}`
+**`GET /health`** → `{"status": "ok", "version": "0.10.0", "gemini": true, "model": "gemini-3.1-flash-lite"}`
 Dient auch der Deploy-Verifikation: Nach einem Push zeigt die Versionsnummer, ob der neue Stand live ist.
 
 **`POST /upload`** (multipart/form-data)
@@ -97,11 +123,11 @@ Dient auch der Deploy-Verifikation: Nach einem Push zeigt die Versionsnummer, ob
 | `speaker` | Form | `Kim` \| `Kathrin` (Fallback: „unbekannt“) |
 | `destination_url` | Form | Google-Docs-URL (optional; leer = kein Docs-Write) |
 
-Antwort: `{job_id, template, file_size_kb, transcript, formatted, doc_written}`
+Antwort: `{job_id, template, file_size_kb, transcript, formatted, markdown, doc_written, queued_for_obsidian, error}`. Bei gescheiterter Tagebuchverarbeitung bleibt die Antwort für den bestehenden Retry-Pfad HTTP 200, aber `formatted` und `markdown` sind `null`, beide Exportflags `false` und `error` enthält eine sichere Meldung. Ein bereits erzeugtes Referenztranskript bleibt im Antwortfeld erhalten.
 
 ### Design-Entscheidungen (Warum ist das so gebaut?)
 
-- **Ein Gemini-Call statt zwei:** Transkription + Formatierung in einer Anfrage, Audio geht inline mit (kein File-Upload zu Gemini, keine Temp-Dateien). JSON-Antwort per `response_schema` (Pydantic `VoiceResult`) erzwungen. Halbiert Latenz und API-Verbrauch.
+- **Vorlagenspezifische Verarbeitung:** Für Tagebücher haben Inhaltstreue und prüfbare Verarbeitung Vorrang vor minimaler Latenz. Die anderen Vorlagen verwenden weiterhin einen kombinierten Aufruf. Audio geht inline mit, ohne Datei-Upload zu Gemini oder Audio-Tempdateien auf dem Server.
 - **Eigenes Datumsformat statt `strftime`:** `%-d` crasht unter Windows, `%B` liefert auf Render englische Monatsnamen. `format_german_date()` + `GERMAN_MONTHS` sind locale-unabhängig.
 - **Service Account statt OAuth:** Kein Login-Flow für die Nutzerinnen. Die Ziel-Docs werden einmalig mit der Service-Account-E-Mail als Editor geteilt.
 - **`dist/` eingecheckt:** Render muss nur `pip install` ausführen, kein Node-Build im Deploy. Preis dafür: nach Frontend-Änderungen **immer `npm run build` vor dem Commit**.
