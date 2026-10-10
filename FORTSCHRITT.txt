@@ -1,7 +1,18 @@
 ═══════════════════════════════════════════════════════════════
   VOICECORE – FORTSCHRITT
-  Release: 10.10.2026 · Version 0.10.0
+  Release: 10.10.2026 · Version 0.10.2
 ═══════════════════════════════════════════════════════════════
+
+━━━ HOTFIXES 10.10.2026 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  v0.10.1: Formal ungültige Einträge einmal strukturell korrigieren,
+  anschließend unverändert gegen das vollständige Transkript prüfen.
+  v0.10.2: Live-Upload scheiterte an Gemini HTTP 503 im Inhaltsaudit.
+  Explizite SDK-Retries: maximal 3 Versuche für 408/429/500/502/503/504,
+  exponentiell mit Jitter, 90 Sekunden Timeout pro HTTP-Versuch.
+  Nur fehlgeschlagene Stufe wiederholen. Kein Export ohne bestandenes Audit.
+  Sichere Fehlermeldung mit Stufe und HTTP-Code. 23 Backend-Tests bestanden,
+  einschließlich echter SDK-Transporttests mit synthetischen Antworten.
+  Laufende Version über /health prüfen. Echte Nutzerabnahme bleibt offen.
 
 ━━━ AKTUELLE ENTWICKLUNG: INHALTSTREUE TAGEBÜCHER ━━━━━━━━━━━
   Nutzerfeedback 10.10.2026: Lange Eingaben werden weiterhin

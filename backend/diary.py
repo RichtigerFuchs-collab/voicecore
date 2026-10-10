@@ -73,6 +73,13 @@ def _generate(client, model: str, contents, instruction: str, stage: str, schema
     config = types.GenerateContentConfig(
         system_instruction=instruction,
         max_output_tokens=MAX_OUTPUT_TOKENS,
+        http_options=types.HttpOptions(
+            timeout=90000,
+            retry_options=types.HttpRetryOptions(
+                attempts=3, initial_delay=1, max_delay=4, exp_base=2, jitter=1,
+                http_status_codes=[408, 429, 500, 502, 503, 504],
+            ),
+        ),
     )
     if schema is not None:
         config.response_mime_type = "application/json"
@@ -84,6 +91,11 @@ def _generate(client, model: str, contents, instruction: str, stage: str, schema
         code = getattr(exc, "code", None)
         safe_code = str(code) if isinstance(code, int) else "unknown"
         print(f"  Tagebuch API-Fehler: stage={stage}, type={type(exc).__name__}, code={safe_code}", flush=True)
+        if code in (408, 429, 500, 502, 503, 504):
+            raise DiaryProcessingError(
+                f"{stage}: Gemini ist vorübergehend nicht erreichbar (HTTP {code}). "
+                "Die automatischen Wiederholungen waren erfolglos. Bitte später erneut senden."
+            ) from exc
         raise
     _require_complete(response, stage)
     if schema is None:

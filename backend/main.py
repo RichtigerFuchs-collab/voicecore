@@ -25,7 +25,7 @@ else:  # Unterstützt weiterhin: cd backend && uvicorn main:app
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.10.1")
+app = FastAPI(title="VoiceCore API", version="0.10.2")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
