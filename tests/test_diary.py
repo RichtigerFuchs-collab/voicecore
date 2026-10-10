@@ -101,6 +101,67 @@ class DiaryPipelineTests(unittest.TestCase):
                 self.assertEqual(repair["issues"], issues)
                 self.assertEqual(json.loads(calls[4].kwargs["contents"])["formatted"], FORMATTED)
 
+    def test_single_line_draft_is_format_repaired_before_clean_audit(self):
+        single_line = FORMATTED.replace("\n", " ")
+        result = self.run_pipeline([
+            self.good[0], response(parsed=DiaryDraft(formatted=single_line)),
+            self.good[1], clean_audit(),
+        ])
+        self.assertEqual(result, (TRANSCRIPT, FORMATTED, diary_to_markdown(FORMATTED)))
+        calls = self.client.models.generate_content.call_args_list
+        self.assertEqual(len(calls), 4)
+        repair = json.loads(calls[2].kwargs["contents"])
+        self.assertEqual(repair["transcript"], TRANSCRIPT)
+        self.assertEqual(repair["formatted"], single_line)
+        self.assertTrue(repair["format_error"])
+        self.assertEqual(calls[2].kwargs["config"].response_schema, DiaryDraft)
+        audit = json.loads(calls[3].kwargs["contents"])
+        self.assertEqual(audit["transcript"], TRANSCRIPT)
+        self.assertEqual(audit["formatted"], FORMATTED)
+        self.assertEqual(calls[3].kwargs["config"].response_schema, DiaryAudit)
+
+    def test_failed_format_repair_retains_transcript_and_stops_before_audit(self):
+        single_line = FORMATTED.replace("\n", " ")
+        failures = [
+            response(parsed=DiaryDraft(formatted=single_line)),
+            response(parsed=None),
+            response(parsed=DiaryDraft(formatted=FORMATTED), reason="MAX_TOKENS"),
+            RuntimeError("secret-provider-detail"),
+        ]
+        for failure in failures:
+            with self.subTest(failure=failure):
+                self.client.models.generate_content.reset_mock()
+                with self.assertRaises(DiaryProcessingError) as caught:
+                    self.run_pipeline([
+                        self.good[0], response(parsed=DiaryDraft(formatted=single_line)),
+                        failure,
+                    ])
+                self.assertEqual(caught.exception.transcript, TRANSCRIPT)
+                self.assertNotIn("secret-provider-detail", str(caught.exception))
+                self.assertEqual(self.client.models.generate_content.call_count, 3)
+
+    def test_format_repair_still_allows_one_content_repair_and_reaudit(self):
+        issues = {"missing_contents": ["Der grüne Schal fehlt"],
+                  "distorted_contents": [], "unsupported_contents": []}
+        single_line = SHORT_DRAFT.replace("\n", " ")
+        result = self.run_pipeline([
+            self.good[0], response(parsed=DiaryDraft(formatted=single_line)),
+            response(parsed=DiaryDraft(formatted=SHORT_DRAFT)),
+            response(parsed=DiaryAudit(**issues)), self.good[1], clean_audit(),
+        ])
+        self.assertEqual(result, (TRANSCRIPT, FORMATTED, diary_to_markdown(FORMATTED)))
+        calls = self.client.models.generate_content.call_args_list
+        self.assertEqual(len(calls), 6)
+        self.assertEqual(json.loads(calls[3].kwargs["contents"])["formatted"], SHORT_DRAFT)
+        repair = json.loads(calls[4].kwargs["contents"])
+        self.assertEqual(repair["transcript"], TRANSCRIPT)
+        self.assertEqual(repair["formatted"], SHORT_DRAFT)
+        self.assertEqual(repair["issues"], issues)
+        final_audit = json.loads(calls[5].kwargs["contents"])
+        self.assertEqual(final_audit["transcript"], TRANSCRIPT)
+        self.assertEqual(final_audit["formatted"], FORMATTED)
+        self.assertEqual(calls[5].kwargs["config"].response_schema, DiaryAudit)
+
     def test_still_incomplete_after_one_repair_fails_with_reference_transcript(self):
         bad = response(parsed=DiaryAudit(
             missing_contents=["Der grüne Schal fehlt"], distorted_contents=[], unsupported_contents=[]))
