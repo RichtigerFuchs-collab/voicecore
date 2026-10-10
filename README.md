@@ -4,16 +4,24 @@
 
 Eine bewusst leichte One-Click-PWA für Kim & Kathrin. Ein Tap auf den Record-Button, sprechen, fertig — der formatierte Eintrag steht Sekunden später im Tagebuch-, Notiz- oder Restaurant-Doc.
 
-**Release v0.10.0 vom 10.10.2026.** Tagebücher werden getrennt transkribiert, ausformuliert und gegen das Referenztranskript geprüft. Die laufende Version zeigt `/health`. Die Abnahme mit echten Aufnahmen steht noch aus.
+**Release v0.10.2 vom 10.10.2026.** Tagebücher werden getrennt transkribiert, ausformuliert und gegen das Referenztranskript geprüft. Die laufende Version zeigt `/health`. Die Abnahme mit echten Aufnahmen steht noch aus.
 
 - **Live-App:** https://voicecore.onrender.com
-- **Release:** 0.10.0 — `/health` zeigt die live laufende Version
+- **Release:** 0.10.2 — `/health` zeigt die live laufende Version
 - **Hosting:** Bestehender Render-Free-Service in Frankfurt; Modell weiterhin `gemini-3.1-flash-lite`.
 - **Obsidian-Anbindung:** siehe [OBSIDIAN.md](OBSIDIAN.md)
 
 > ⚠️ **Historischer Fehlerbericht vom 26.07.2026, aktuell nicht erneut verifiziert:** Googles **kostenloser** Gemini-Tarif ist für Server in der **EU** gesperrt (`400 User location is not supported`). Render läuft in Frankfurt → Transkription scheitert derzeit. Nicht verarbeitete Aufnahmen bleiben in der App gesichert (nichts geht verloren). Lösung: Render in US-Region umziehen (bleibt 0 €) **oder** Google-Billing aktivieren (in der EU nutzbar, Kosten ~Cent). Details in [FORTSCHRITT.txt](FORTSCHRITT.txt).
 
 ---
+
+## Fehlerkorrekturen v0.10.1 und v0.10.2
+
+Ein formal ungültiger Tagebuchentwurf erhält einmal eine Strukturkorrektur aus dem vollständigen Transkript und wird anschließend weiterhin auf Inhaltstreue geprüft. Maximal sechs erfolgreiche Modellaufrufe bei Struktur- und Inhaltskorrektur.
+
+Am 10.10.2026 lieferte Gemini bei einem echten Upload in der Inhaltsprüfung HTTP 503. Der verwendete SDK-Stand 1.55.0 wiederholt ohne explizite Retry-Konfiguration nicht automatisch. Jede Tagebuchstufe verwendet jetzt höchstens drei HTTP-Versuche mit exponentieller Wartezeit und Jitter für 408, 429, 500, 502, 503 und 504. Nur der betroffene Aufruf wird wiederholt; Export erfolgt erst nach bestandener Prüfung. Ein HTTP-Versuch hat ein Timeout von 90 Sekunden. Bei ausgeschöpften Wiederholungen nennt die sichere App-Meldung Stufe und HTTP-Code. Providertexte werden nicht protokolliert. Die lokale Aufnahme bleibt erhalten; serverseitig werden Audio oder Transkript nicht dauerhaft gespeichert.
+
+23 Backend-Tests bestanden, darunter echte SDK-Aufrufe mit synthetischem HTTP-Transport für vorübergehendes 503, dauerhaftes 503 und nicht wiederholtes 400. Live-Health und Render-Status separat prüfen. Diese Tests bestätigen keine dauerhafte Verfügbarkeit des Gemini-Dienstes. Vorgehen entspricht der [Gemini-Retry-Empfehlung](https://ai.google.dev/gemini-api/docs/troubleshooting#retry-strategy).
 
 ## Features (Was kann die App?)
 
