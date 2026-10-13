@@ -25,7 +25,7 @@ else:  # Unterstützt weiterhin: cd backend && uvicorn main:app
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="VoiceCore API", version="0.10.2")
+app = FastAPI(title="VoiceCore API", version="0.10.3")
 
 # ─── Template-Prompts ─────────────────────────────────────────────────────────
 
@@ -62,6 +62,13 @@ TEMPLATE_PROMPTS = {
         "Dopplungen entfernen. Wiederholungen mit neuen Details, veränderter Bewertung "
         "oder emotionaler Bedeutung bleiben erhalten. Berücksichtige explizite Selbstkorrekturen. "
         "Erfinde keine Ereignisse, Gefühle, Motive oder erklärenden Zusammenhänge.\n"
+        "- Sprechpausen und Aufnahme-Kommentare: Entferne reine Such- und Überbrückungssätze "
+        "wie 'Was soll ich denn noch sagen?', 'Da muss ich noch mal überlegen', "
+        "'Was wollte ich noch erzählen?' und Kommentare zum Aufnehmen. Das sind keine "
+        "Tagebuchreflexionen. Lasse Gedanken danach weg, wenn nur solche Sätze vorliegen. "
+        "Bewahre dagegen inhaltliche Zweifel und Reflexionen, etwa 'Ich muss überlegen, "
+        "ob ich Alex anrufe', sowie jedes Detail nach einer Sprechpause. Bei 'Fast vergessen' "
+        "darf die Einleitung entfallen, aber die folgende Erinnerung bleibt vollständig.\n"
         "- Datum der Titelzeile: Wenn im Transkript ein konkretes Datum oder ein relativer "
         "Bezug genannt wird (z.B. 'am 8. Juli', 'gestern', 'letzten Samstag'), berechne das "
         "gemeinte Datum ausgehend von heute ({date}) und verwende es in der Titelzeile. "
